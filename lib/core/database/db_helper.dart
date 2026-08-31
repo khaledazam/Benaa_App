@@ -27,6 +27,8 @@ class DBHelper {
   final List<Map<String, dynamic>> _memStockMovements = [];
   final List<Map<String, dynamic>> _memReturns = [];
   final List<Map<String, dynamic>> _memReturnItems = [];
+  final List<Map<String, dynamic>> _memCustomers = [];
+  final List<Map<String, dynamic>> _memCustomerPayments = [];
 
   Future<Database?> get database async {
     if (kIsWeb) {
@@ -622,14 +624,15 @@ class DBHelper {
 
       int nextId = _memTransferItems.isEmpty ? 1 : ((_memTransferItems.map((i) => i['id'] is int ? i['id'] as int : 0).fold(0, (max, e) => e > max ? e : max)) + 1);
       for (var item in items) {
+        final qty = (item['qty'] ?? item['expected_qty'] as num?)?.toDouble() ?? 1.0;
         _memTransferItems.add({
           'id': nextId++,
           'transfer_id': transferId,
           'item_code': item['item_code'],
           'item_name': item['item_name'],
           'author': author,
-          'expected_qty': (item['qty'] as num).toDouble(),
-          'actual_qty': (item['qty'] as num).toDouble(),
+          'expected_qty': qty,
+          'actual_qty': qty,
           'notes': item['notes'] ?? '',
         });
       }
@@ -1062,5 +1065,160 @@ class DBHelper {
       debugPrint("Failed to read database bytes: $e");
     }
     return null;
+  }
+
+  /// Delete item from local stock
+  Future<void> deleteItem(String code) async {
+    final db = await database;
+    if (db == null || _isInMemoryFallback) {
+      _memItems.removeWhere((i) => i['code'] == code);
+      return;
+    }
+    try {
+      await db.delete('items', where: 'code = ?', whereArgs: [code]);
+      await db.delete('product_units', where: 'product_code = ?', whereArgs: [code]);
+    } catch (e) {
+      debugPrint("Error deleting item $code: $e");
+    }
+  }
+
+  /// Safe Void / Cancellation of a Sale Invoice:
+  /// 1. Restores sold quantities back to item stock
+  /// 2. Reduces customer debt balance
+  /// 3. Deletes the invoice
+  Future<bool> voidSaleInvoice(int saleId) async {
+    if (_database == null || _isInMemoryFallback) {
+      final saleIndex = _memSales.indexWhere((s) => s['id'] == saleId);
+      if (saleIndex == -1) return false;
+      final sale = _memSales[saleIndex];
+      final shopName = sale['shop_name'];
+      final totalAmount = (sale['total_amount'] as num).toDouble();
+
+      // Restore items stock
+      final items = _memSaleItems.where((i) => i['sale_id'] == saleId).toList();
+      for (var it in items) {
+        final itmIdx = _memItems.indexWhere((m) => m['code'] == it['item_code']);
+        if (itmIdx != -1) {
+          _memItems[itmIdx]['current_stock'] = (_memItems[itmIdx]['current_stock'] as num).toDouble() + (it['qty'] as num).toDouble();
+        }
+      }
+
+      // Revert customer balance
+      final custIdx = _memCustomers.indexWhere((c) => c['name'] == shopName);
+      if (custIdx != -1) {
+        final curBal = (_memCustomers[custIdx]['current_balance'] as num).toDouble();
+        _memCustomers[custIdx]['current_balance'] = (curBal - totalAmount).clamp(0.0, double.infinity);
+      }
+
+      _memSaleItems.removeWhere((i) => i['sale_id'] == saleId);
+      _memSales.removeAt(saleIndex);
+      return true;
+    }
+
+    final db = await database;
+    if (db == null) return false;
+
+    try {
+      final saleMaps = await db.query('sales', where: 'id = ?', whereArgs: [saleId]);
+      if (saleMaps.isEmpty) return false;
+
+      final sale = saleMaps.first;
+      final shopName = sale['shop_name'].toString();
+      final totalAmount = (sale['total_amount'] as num).toDouble();
+
+      // Get sale items
+      final saleItems = await db.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
+
+      // 1. Restock each item
+      for (var it in saleItems) {
+        final itemCode = it['item_code'].toString();
+        final qty = (it['qty'] as num).toDouble();
+        await db.rawUpdate('''
+          UPDATE items 
+          SET current_stock = current_stock + ? 
+          WHERE code = ?
+        ''', [qty, itemCode]);
+      }
+
+      // 2. Adjust customer balance
+      await db.rawUpdate('''
+        UPDATE customers 
+        SET current_balance = MAX(0.0, current_balance - ?) 
+        WHERE name = ?
+      ''', [totalAmount, shopName]);
+
+      // 3. Delete sale items and sale invoice
+      await db.delete('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
+      await db.delete('sales', where: 'id = ?', whereArgs: [saleId]);
+
+      return true;
+    } catch (e) {
+      debugPrint("Error voiding sale invoice: $e");
+      return false;
+    }
+  }
+
+  /// Safe Void of a Customer Payment:
+  /// 1. Re-adds the paid amount back into customer debt
+  /// 2. Deletes the payment record
+  Future<bool> voidCustomerPayment(int paymentId) async {
+    if (_database == null || _isInMemoryFallback) {
+      final pIndex = _memCustomerPayments.indexWhere((p) => p['id'] == paymentId);
+      if (pIndex == -1) return false;
+      final payment = _memCustomerPayments[pIndex];
+      final custName = payment['customer_name'];
+      final amount = (payment['amount_paid'] as num).toDouble();
+
+      final custIdx = _memCustomers.indexWhere((c) => c['name'] == custName);
+      if (custIdx != -1) {
+        _memCustomers[custIdx]['current_balance'] = (_memCustomers[custIdx]['current_balance'] as num).toDouble() + amount;
+      }
+      _memCustomerPayments.removeAt(pIndex);
+      return true;
+    }
+
+    final db = await database;
+    if (db == null) return false;
+
+    try {
+      final pMaps = await db.query('customer_payments', where: 'id = ?', whereArgs: [paymentId]);
+      if (pMaps.isEmpty) return false;
+
+      final payment = pMaps.first;
+      final custName = payment['customer_name'].toString();
+      final amount = (payment['amount_paid'] as num).toDouble();
+
+      // Re-add to debt
+      await db.rawUpdate('''
+        UPDATE customers 
+        SET current_balance = current_balance + ? 
+        WHERE name = ?
+      ''', [amount, custName]);
+
+      await db.delete('customer_payments', where: 'id = ?', whereArgs: [paymentId]);
+      return true;
+    } catch (e) {
+      debugPrint("Error voiding payment: $e");
+      return false;
+    }
+  }
+
+  /// Delete Transfer Voucher
+  Future<void> deleteTransfer(String transferId) async {
+    if (_database == null || _isInMemoryFallback) {
+      _memTransfers.removeWhere((t) => t['id'] == transferId);
+      _memTransferItems.removeWhere((i) => i['transfer_id'] == transferId);
+      return;
+    }
+
+    final db = await database;
+    if (db == null) return;
+
+    try {
+      await db.delete('transfer_items', where: 'transfer_id = ?', whereArgs: [transferId]);
+      await db.delete('transfers', where: 'id = ?', whereArgs: [transferId]);
+    } catch (e) {
+      debugPrint("Error deleting transfer: $e");
+    }
   }
 }

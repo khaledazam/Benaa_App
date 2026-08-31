@@ -182,6 +182,33 @@ class InventoryProvider extends ChangeNotifier {
     await adjustItemStockDirectly(itemCode, newStock, 'تحديث رصيد عبر المسح الضوئي الذكي (AI OCR)');
   }
 
+  Future<void> deleteItem(String code) async {
+    await _dbHelper.deleteItem(code);
+    await loadLocalItems();
+  }
+
+  Future<bool> voidSaleInvoice(int saleId) async {
+    final success = await _dbHelper.voidSaleInvoice(saleId);
+    if (success) {
+      await loadLocalItems();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> voidCustomerPayment(int paymentId) async {
+    final success = await _dbHelper.voidCustomerPayment(paymentId);
+    if (success) {
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<void> deleteTransfer(String transferId) async {
+    await _dbHelper.deleteTransfer(transferId);
+    await loadTransfers();
+  }
+
   Future<void> updateInvoiceNotes(String transferId, String newNotes) async {
     final db = await _dbHelper.database;
     if (db != null) {

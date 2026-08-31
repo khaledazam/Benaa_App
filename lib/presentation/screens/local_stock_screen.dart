@@ -363,6 +363,44 @@ class _LocalStockScreenState extends State<LocalStockScreen> {
     );
   }
 
+  void _confirmDeleteItem(BuildContext context, ItemModel item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.getCardBg(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('⚠️ تأكيد حذف الصنف', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold), textAlign: TextAlign.right),
+        content: Text(
+          'هل أنت متأكد من حذف الصنف "${item.name}" (كود: ${item.code}) نهائياً من المستودع؟\n\nتنبيه: سيتم مسح الصنف وسجلاته من المخزن.',
+          style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 13),
+          textAlign: TextAlign.right,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Provider.of<InventoryProvider>(context, listen: false).deleteItem(item.code);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: AppColors.success,
+                    content: Text('تم حذف الصنف (${item.name}) من المخزن بنجاح 🗑️'),
+                  ),
+                );
+              }
+            },
+            child: const Text('نعم، حذف الصنف'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -510,6 +548,11 @@ class _LocalStockScreenState extends State<LocalStockScreen> {
                                     icon: const Icon(Icons.edit_note, color: AppColors.warning, size: 22),
                                     tooltip: 'تعديل المخزون المباشر',
                                     onPressed: () => _showAdjustStockDialog(context, item),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                    tooltip: 'حذف الصنف من المخزن',
+                                    onPressed: () => _confirmDeleteItem(context, item),
                                   ),
                                   Column(
                                     mainAxisAlignment: MainAxisAlignment.center,

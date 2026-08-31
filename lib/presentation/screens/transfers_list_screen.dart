@@ -137,9 +137,45 @@ class _TransfersListScreenState extends State<TransfersListScreen> {
                         child: ListTile(
                           title: Text('فاتورة تحويل رقم: ${t.transferNumber}', style: TextStyle(color: AppColors.getTextPrimary(context), fontWeight: FontWeight.bold)),
                           subtitle: Text('المصدر: ${t.fromWarehouse} | التاريخ: ${t.date}', style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 12)),
-                          trailing: Chip(
-                            label: Text(t.status == 'approved' ? 'مكتملة 🟢' : 'قيد التدقيق ⏳', style: const TextStyle(color: Colors.white, fontSize: 11)),
-                            backgroundColor: t.status == 'approved' ? AppColors.success : AppColors.warning,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Chip(
+                                label: Text(t.status == 'approved' ? 'مكتملة 🟢' : 'قيد التدقيق ⏳', style: const TextStyle(color: Colors.white, fontSize: 11)),
+                                backgroundColor: t.status == 'approved' ? AppColors.success : AppColors.warning,
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                tooltip: 'حذف الفاتورة',
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (c) => AlertDialog(
+                                      backgroundColor: AppColors.getCardBg(context),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      title: const Text('⚠️ تأكيد حذف فاتورة التحويل', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold), textAlign: TextAlign.right),
+                                      content: Text('هل أنت متأكد من حذف فاتورة التحويل (${t.transferNumber})؟', style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 13), textAlign: TextAlign.right),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(c), child: const Text('إلغاء', style: TextStyle(color: AppColors.textSecondary))),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                                          onPressed: () async {
+                                            Navigator.pop(c);
+                                            await Provider.of<InventoryProvider>(context, listen: false).deleteTransfer(t.id);
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(backgroundColor: AppColors.success, content: Text('تم حذف الفاتورة (${t.transferNumber}) بنجاح 🗑️')),
+                                              );
+                                            }
+                                          },
+                                          child: const Text('نعم، حذف'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                           onTap: () {
                             Navigator.push(
