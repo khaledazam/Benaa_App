@@ -170,6 +170,18 @@ class InventoryProvider extends ChangeNotifier {
     await loadLocalItems();
   }
 
+  Future<void> addItem(ItemModel item) async {
+    final db = await _dbHelper.database;
+    if (db != null) {
+      await db.insert('items', item.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await loadLocalItems();
+  }
+
+  Future<void> updateItemStock(String itemCode, double newStock) async {
+    await adjustItemStockDirectly(itemCode, newStock, 'تحديث رصيد عبر المسح الضوئي الذكي (AI OCR)');
+  }
+
   Future<void> updateInvoiceNotes(String transferId, String newNotes) async {
     final db = await _dbHelper.database;
     if (db != null) {

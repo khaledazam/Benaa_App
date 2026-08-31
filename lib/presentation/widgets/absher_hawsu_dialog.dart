@@ -10,6 +10,7 @@ import '../screens/returns_management_screen.dart';
 import 'customer_statement_dialog.dart';
 import 'customer_payment_dialog.dart';
 import 'packaging_unit_converter_dialog.dart';
+import 'invoice_ocr_scanner_dialog.dart';
 import 'hawsu_loading_overlay.dart';
 
 class AbsherHawsuDialog extends StatefulWidget {
@@ -91,6 +92,13 @@ class _AbsherHawsuDialogState extends State<AbsherHawsuDialog> with SingleTicker
       'action': 'returns',
     },
     {
+      'title': '📸 مسح فاتورة ورقية بالذكاء الاصطناعي (AI OCR)',
+      'subtitle': 'قراءة الفواتير وسندات التوريد الورقية وتفريغها بالمخزن تلقائياً',
+      'icon': Icons.document_scanner,
+      'color': const Color(0xFF9333EA),
+      'action': 'ocr',
+    },
+    {
       'title': '🖨️ طباعة وتصدير جرد بريدة (PDF)',
       'subtitle': 'تصدير تقرير الجرد الشامل وقيمة المخزون',
       'icon': Icons.picture_as_pdf,
@@ -160,6 +168,12 @@ class _AbsherHawsuDialogState extends State<AbsherHawsuDialog> with SingleTicker
         Navigator.push(
           context,
           HawsuPageRoute(page: const ReturnsManagementScreen()),
+        );
+        break;
+      case 'ocr':
+        showDialog(
+          context: context,
+          builder: (ctx) => const InvoiceOcrScannerDialog(),
         );
         break;
       case 'pdf':

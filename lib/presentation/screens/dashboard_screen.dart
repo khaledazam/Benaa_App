@@ -23,6 +23,7 @@ import '../widgets/customer_statement_dialog.dart';
 import '../widgets/customer_payment_dialog.dart';
 import '../widgets/absher_hawsu_dialog.dart';
 import '../widgets/hawsu_loading_overlay.dart';
+import '../widgets/invoice_ocr_scanner_dialog.dart';
 import '../../core/services/biometric_auth_service.dart';
 import '../../core/services/app_update_service.dart';
 import '../providers/theme_provider.dart';
@@ -304,6 +305,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               items: provider.localItems,
                               totalValuation: totalValuation,
                               lowStockCount: lowStockCount,
+                            );
+                          },
+                        ),
+                        ElevatedButton.icon(
+                          icon: Icon(Icons.document_scanner, size: AppResponsive.iconSize(context, 16)),
+                          label: Text(
+                            '📸 مسح فاتورة ورقية (AI OCR)',
+                            style: TextStyle(fontSize: AppResponsive.fontSize(context, 11), fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6A1B9A),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            minimumSize: const Size(90, 36),
+                          ),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => const InvoiceOcrScannerDialog(),
                             );
                           },
                         ),
