@@ -141,8 +141,19 @@ class _TransfersListScreenState extends State<TransfersListScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Chip(
-                                label: Text(t.status == 'approved' ? 'مكتملة 🟢' : 'قيد التدقيق ⏳', style: const TextStyle(color: Colors.white, fontSize: 11)),
-                                backgroundColor: t.status == 'approved' ? AppColors.success : AppColors.warning,
+                                label: Text(
+                                  (t.status == 'approved' || t.status == 'audited_matched')
+                                      ? 'مكتملة ومستلمة 🟢'
+                                      : t.status == 'audited_discrepancy'
+                                          ? 'مكتملة بفارق ⚠️'
+                                          : 'قيد التدقيق ⏳',
+                                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                                ),
+                                backgroundColor: (t.status == 'approved' || t.status == 'audited_matched')
+                                    ? AppColors.success
+                                    : t.status == 'audited_discrepancy'
+                                        ? AppColors.danger
+                                        : AppColors.warning,
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
