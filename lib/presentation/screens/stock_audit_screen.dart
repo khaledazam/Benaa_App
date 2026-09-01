@@ -260,8 +260,25 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('${_selectedItem!.currentStock.toInt()} ${_selectedItem!.unit}', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 16)),
-                              const Text('الرصيد المسجل بالسيستم:', style: TextStyle(color: AppColors.textSecondary)),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryAccent.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: AppColors.primaryAccent.withOpacity(0.4)),
+                                    ),
+                                    child: Text(
+                                      'الوحدة: ${_selectedItem!.unit}',
+                                      style: const TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text('${_selectedItem!.currentStock.toInt()} ${_selectedItem!.unit}', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 16)),
+                                ],
+                              ),
+                              const Text('الرصيد والوحدة المسجلة بالسيستم:', style: TextStyle(color: AppColors.textSecondary)),
                             ],
                           ),
                         ],
@@ -275,10 +292,10 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
                     controller: _countedQtyController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
-                    decoration: const InputDecoration(
-                      labelText: 'الكمية الفردية الفعلية في المستودع حالياً',
-                      labelStyle: TextStyle(color: AppColors.textSecondary),
-                      prefixIcon: Icon(Icons.calculate_outlined, color: AppColors.primaryAccent),
+                    decoration: InputDecoration(
+                      labelText: 'الكمية الفعلية المجرودة بالمستودع (بالـ ${_selectedItem!.unit})',
+                      labelStyle: const TextStyle(color: AppColors.textSecondary),
+                      prefixIcon: const Icon(Icons.calculate_outlined, color: AppColors.primaryAccent),
                     ),
                   ),
 

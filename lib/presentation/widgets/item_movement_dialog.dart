@@ -77,6 +77,23 @@ class _ItemMovementDialogState extends State<ItemMovementDialog> {
                   ),
                   Column(
                     children: [
+                      Text('الوحدة المسجلة', style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryAccent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.primaryAccent.withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          item.unit,
+                          style: const TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    children: [
                       Text('التصنيف', style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11)),
                       Text(item.category, style: TextStyle(color: AppColors.getTextPrimary(context), fontWeight: FontWeight.bold, fontSize: 12)),
                     ],

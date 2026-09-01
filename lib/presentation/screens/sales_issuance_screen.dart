@@ -582,7 +582,24 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('اختر وحدة البيع والسعر المطلوب:', style: TextStyle(color: AppColors.primaryAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryAccent.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: AppColors.primaryAccent.withOpacity(0.4)),
+                              ),
+                              child: Text(
+                                'الوحدة المسجلة: ${_selectedItem!.unit}',
+                                style: const TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                            const Text('اختر وحدة البيع والسعر المطلوب:', style: TextStyle(color: AppColors.primaryAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<ProductUnitModel>(
                           value: _selectedUnit ?? _selectedItem!.units.firstWhere((u) => u.isBase, orElse: () => _selectedItem!.units.first),
