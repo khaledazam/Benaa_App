@@ -359,27 +359,32 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
                       children: [
                         Expanded(
                           flex: 3,
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedUnit,
-                            dropdownColor: AppColors.getCardBg(context),
-                            style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 13),
-                            decoration: InputDecoration(
-                              labelText: 'وحدة القياس / التعبئة',
-                              labelStyle: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 10),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: 'حبة', child: Text('حبة / قطعة')),
-                              DropdownMenuItem(value: 'متر مربع', child: Text('متر مربع (m²)')),
-                              DropdownMenuItem(value: 'كرتونة', child: Text('كرتونة')),
-                              DropdownMenuItem(value: 'طبلية', child: Text('طبلية / طاولة / لوح')),
-                              DropdownMenuItem(value: 'كيس', child: Text('كيس / شيكارة')),
-                              DropdownMenuItem(value: 'طن', child: Text('طن')),
-                              DropdownMenuItem(value: 'كجم', child: Text('كجم')),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _selectedUnit = val);
-                              }
+                          child: Builder(
+                            builder: (context) {
+                              final standardUnits = ['حبة', 'لوح', 'متر', 'متر مربع', 'كرتونة', 'طبلية', 'كيس', 'طن', 'كجم', 'ربطة', 'حزمة', 'علبة', 'طرد', 'جالون', 'لتر'];
+                              final currentVal = _selectedUnit.trim().isNotEmpty ? _selectedUnit.trim() : 'حبة';
+                              final itemsList = standardUnits.contains(currentVal) ? standardUnits : [...standardUnits, currentVal];
+
+                              return DropdownButtonFormField<String>(
+                                value: currentVal,
+                                dropdownColor: AppColors.getCardBg(context),
+                                style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 13),
+                                decoration: InputDecoration(
+                                  labelText: 'وحدة القياس / التعبئة',
+                                  labelStyle: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 10),
+                                ),
+                                items: itemsList.map((u) {
+                                  return DropdownMenuItem<String>(
+                                    value: u,
+                                    child: Text(u == 'حبة' ? 'حبة / قطعة' : u == 'متر مربع' ? 'متر مربع (m²)' : u == 'طبلية' ? 'طبلية / لوح' : u),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _selectedUnit = val);
+                                  }
+                                },
+                              );
                             },
                           ),
                         ),
