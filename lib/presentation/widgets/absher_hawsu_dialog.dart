@@ -99,6 +99,13 @@ class _AbsherHawsuDialogState extends State<AbsherHawsuDialog> with SingleTicker
       'action': 'ocr',
     },
     {
+      'title': '📋 سند إستلام بضاعة (قالب شركة إطار ديكور)',
+      'subtitle': 'توليد وطباعة سند استلام مطابق لدفتر الاستلام الورقي الرسمي',
+      'icon': Icons.description_outlined,
+      'color': const Color(0xFF0284C7),
+      'action': 'goods_receipt',
+    },
+    {
       'title': '🖨️ طباعة وتصدير جرد بريدة (PDF)',
       'subtitle': 'تصدير تقرير الجرد الشامل وقيمة المخزون',
       'icon': Icons.picture_as_pdf,
@@ -128,6 +135,27 @@ class _AbsherHawsuDialogState extends State<AbsherHawsuDialog> with SingleTicker
     final provider = Provider.of<InventoryProvider>(context, listen: false);
 
     switch (action) {
+      case 'goods_receipt':
+        final sampleItems = provider.localItems.isNotEmpty
+            ? provider.localItems.take(5).map((i) => {
+                'quantity': i.currentStock.toInt(),
+                'description': '${i.name} (كود ${i.code})',
+              }).toList()
+            : [
+                {'quantity': 4136, 'description': 'جسر حديد 4126 + 10 حبات'},
+                {'quantity': 450, 'description': 'عرضية 60 سم ديكور'},
+                {'quantity': 450, 'description': 'عرضية 120 سم ديكور'},
+                {'quantity': 120, 'description': 'زاوية ديكور ألومنيوم'},
+              ];
+
+        await PdfReportService.printOrPreviewGoodsReceiptVoucher(
+          voucherNumber: '0052',
+          recipientName: 'مستودع بريدة - القصيم',
+          date: DateTime.now(),
+          items: sampleItems,
+          notes: 'الزاوية في الفاتورة السابقة',
+        );
+        break;
       case 'sales':
         Navigator.push(
           context,

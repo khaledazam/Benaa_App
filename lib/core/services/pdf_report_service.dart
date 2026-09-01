@@ -1103,4 +1103,246 @@ class PdfReportService {
 
     return pdf.save();
   }
+
+  /// توليد وطباعة سند استلام بضاعة رسمي مطابق لدفتر شركة إطار ديكور
+  static Future<void> printOrPreviewGoodsReceiptVoucher({
+    required String voucherNumber,
+    required String recipientName,
+    required DateTime date,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+    String companyNameAr = 'شركة إطار ديكور',
+    String companyNameEn = 'Etar Decor Company',
+    String crNumber = '7053410572',
+    String vatNumber = '314572523900003',
+  }) async {
+    final pdfBytes = await generateGoodsReceiptVoucherPdf(
+      voucherNumber: voucherNumber,
+      recipientName: recipientName,
+      date: date,
+      items: items,
+      notes: notes,
+      companyNameAr: companyNameAr,
+      companyNameEn: companyNameEn,
+      crNumber: crNumber,
+      vatNumber: vatNumber,
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdfBytes,
+      name: 'Goods_Receipt_Voucher_$voucherNumber.pdf',
+    );
+  }
+
+  /// إنشاء ملف PDF لسند إستلام بضاعة مطابق لدفتر المؤسسة الميداني
+  static Future<Uint8List> generateGoodsReceiptVoucherPdf({
+    required String voucherNumber,
+    required String recipientName,
+    required DateTime date,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+    String companyNameAr = 'شركة إطار ديكور',
+    String companyNameEn = 'Etar Decor Company',
+    String crNumber = '7053410572',
+    String vatNumber = '314572523900003',
+  }) async {
+    final pdf = pw.Document();
+    final font = await _loadFont();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(28),
+        build: (pw.Context context) {
+          return pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                // Top Header (Arabic on right, English on left)
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(12),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.black, width: 1.5),
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      // Right: Arabic Header
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(companyNameAr, style: pw.TextStyle(font: font, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                          pw.SizedBox(height: 3),
+                          pw.Text('س.ت : $crNumber', style: pw.TextStyle(font: font, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                          pw.Text('الرقم الضريبي : $vatNumber', style: pw.TextStyle(font: font, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                        ],
+                      ),
+
+                      // Center Title Badge
+                      pw.Column(
+                        children: [
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            decoration: pw.BoxDecoration(
+                              color: const PdfColor(0.08, 0.20, 0.38),
+                              borderRadius: pw.BorderRadius.circular(20),
+                            ),
+                            child: pw.Text(
+                              'سند إستلام بضاعة',
+                              style: pw.TextStyle(font: font, fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                            ),
+                          ),
+                          pw.SizedBox(height: 6),
+                          pw.Text(
+                            voucherNumber,
+                            style: pw.TextStyle(font: font, fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.red800),
+                          ),
+                        ],
+                      ),
+
+                      // Left: English Header
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text(companyNameEn, style: pw.TextStyle(font: font, fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                          pw.SizedBox(height: 3),
+                          pw.Text('C.R. $crNumber', style: pw.TextStyle(font: font, fontSize: 10)),
+                          pw.Text('VAT No.: $vatNumber', style: pw.TextStyle(font: font, fontSize: 10)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                pw.SizedBox(height: 12),
+
+                // Meta Info Row (Date & Recipient)
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.grey100,
+                    borderRadius: pw.BorderRadius.circular(6),
+                    border: pw.Border.all(color: PdfColors.grey400, width: 0.8),
+                  ),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Row(
+                        children: [
+                          pw.Text('اسم المستلم: ', style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(recipientName.isNotEmpty ? recipientName : 'مستودع بريدة - القصيم', style: pw.TextStyle(font: font, fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                        ],
+                      ),
+                      pw.Row(
+                        children: [
+                          pw.Text('التاريخ / Date: ', style: pw.TextStyle(font: font, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                          pw.Text('${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}', style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                pw.SizedBox(height: 14),
+
+                // Goods Table (Columns: م | العدد .Qty | البيان Description)
+                pw.Table(
+                  border: pw.TableBorder.all(color: PdfColors.black, width: 1.0),
+                  columnWidths: {
+                    0: const pw.FixedColumnWidth(40),
+                    1: const pw.FixedColumnWidth(80),
+                    2: const pw.FlexColumnWidth(3),
+                  },
+                  children: [
+                    // Header Row
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                      children: [
+                        pw.Container(padding: const pw.EdgeInsets.all(6), alignment: pw.Alignment.center, child: pw.Text('م', style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                        pw.Container(padding: const pw.EdgeInsets.all(6), alignment: pw.Alignment.center, child: pw.Text('العدد .Qty', style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                        pw.Container(padding: const pw.EdgeInsets.all(6), alignment: pw.Alignment.center, child: pw.Text('البيــــــــــان Description', style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      ],
+                    ),
+                    // Item Rows
+                    ...items.asMap().entries.map((entry) {
+                      final idx = entry.key + 1;
+                      final it = entry.value;
+                      final qty = it['quantity'] ?? it['qty'] ?? 1;
+                      final desc = it['description'] ?? it['name'] ?? '';
+
+                      return pw.TableRow(
+                        children: [
+                          pw.Container(padding: const pw.EdgeInsets.all(8), alignment: pw.Alignment.center, child: pw.Text('$idx', style: pw.TextStyle(font: font, fontSize: 11))),
+                          pw.Container(padding: const pw.EdgeInsets.all(8), alignment: pw.Alignment.center, child: pw.Text('$qty', style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                          pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8), alignment: pw.Alignment.centerRight, child: pw.Text(desc.toString(), style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                        ],
+                      );
+                    }).toList(),
+
+                    // Empty filler rows for official printed voucher look
+                    if (items.length < 6)
+                      ...List.generate(6 - items.length, (i) => pw.TableRow(
+                        children: [
+                          pw.Container(padding: const pw.EdgeInsets.all(12), child: pw.Text('')),
+                          pw.Container(padding: const pw.EdgeInsets.all(12), child: pw.Text('')),
+                          pw.Container(padding: const pw.EdgeInsets.all(12), child: pw.Text('')),
+                        ],
+                      )),
+                  ],
+                ),
+
+                pw.SizedBox(height: 12),
+
+                // Notes section
+                if (notes != null && notes.isNotEmpty)
+                  pw.Container(
+                    width: double.infinity,
+                    padding: const pw.EdgeInsets.all(8),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.grey400),
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Text('ملاحظات: $notes', style: pw.TextStyle(font: font, fontSize: 10, fontStyle: pw.FontStyle.italic)),
+                  ),
+
+                pw.Spacer(),
+
+                // Signatures & Footer
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(10),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(top: pw.BorderSide(color: PdfColors.grey400, width: 0.8)),
+                  ),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('توقيع المستلم: ...........................................', style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('ختم وتوقيع أمين المستودع: ...........................................', style: pw.TextStyle(font: font, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                    ],
+                  ),
+                ),
+
+                pw.SizedBox(height: 6),
+
+                // Branch & Location Banner
+                pw.Container(
+                  alignment: pw.Alignment.center,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Text(
+                    '📍 جدة - حي المحاميد | 📍 مستودع القصيم - بريدة | هاتف: 0500000000',
+                    style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.grey700),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
 }
