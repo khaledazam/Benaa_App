@@ -216,7 +216,180 @@ class DBHelper {
 
   // --- Web / Fallback In-Memory Initializer ---
   void _initMemData() {
-    // Production Mode: Clean Empty Initial State
+    if (_memItems.isNotEmpty) return;
+
+    _memItems.addAll([
+      {
+        'code': '154',
+        'name': 'بلاط دبيس مقاس 60*60 رمادي ديكور فاخر',
+        'category': 'ديكور أرضيات',
+        'unit': 'كرتونة',
+        'packaging_unit': 'كرتونة',
+        'conversion_factor': 1.44,
+        'current_stock': 999.0,
+        'unit_price': 45.0,
+        'location': 'ممر A - رف 1',
+        'size': '60*60 سم',
+        'color': 'رمادي فاتح',
+        'finish_type': 'مطفي',
+      },
+      {
+        'code': '4126',
+        'name': 'جسر حديد معلق سقف مستعار 4 متر',
+        'category': 'قطاعات وأسقف',
+        'unit': 'حبة',
+        'packaging_unit': 'ربطة',
+        'conversion_factor': 10.0,
+        'current_stock': 450.0,
+        'unit_price': 28.0,
+        'location': 'ممر B - رف 2',
+        'size': '4 متر',
+        'color': 'فضي مجلفن',
+        'finish_type': 'سماكة 0.5 مم',
+      },
+      {
+        'code': '6001',
+        'name': 'عرضية 60 سم نظام تعليق سقف مستعار',
+        'category': 'قطاعات وأسقف',
+        'unit': 'حبة',
+        'packaging_unit': 'كرتونة',
+        'conversion_factor': 60.0,
+        'current_stock': 450.0,
+        'unit_price': 12.0,
+        'location': 'ممر B - رف 3',
+        'size': '60 سم',
+        'color': 'أبيض ناصع',
+        'finish_type': 'مقاوم للصدأ',
+      },
+      {
+        'code': '1202',
+        'name': 'عرضية 120 سم نظام تعليق سقف مستعار',
+        'category': 'قطاعات وأسقف',
+        'unit': 'حبة',
+        'packaging_unit': 'كرتونة',
+        'conversion_factor': 40.0,
+        'current_stock': 450.0,
+        'unit_price': 18.0,
+        'location': 'ممر B - رف 3',
+        'size': '120 سم',
+        'color': 'أبيض ناصع',
+        'finish_type': 'مقاوم للصدأ',
+      },
+      {
+        'code': '3001',
+        'name': 'زاوية ديكور ألومنيوم 3 متر بيضاء',
+        'category': 'زوايا وإكسسوارات',
+        'unit': 'حبة',
+        'packaging_unit': 'حزمة',
+        'conversion_factor': 25.0,
+        'current_stock': 120.0,
+        'unit_price': 15.0,
+        'location': 'ممر C - رف 1',
+        'size': '3 متر',
+        'color': 'أبيض',
+        'finish_type': 'ألومنيوم مدهون',
+      },
+      {
+        'code': '9042',
+        'name': 'دهان رويال حريري ناصع البياض',
+        'category': 'دهانات وعوازل',
+        'unit': 'كرتونة',
+        'packaging_unit': 'كرتونة',
+        'conversion_factor': 4.0,
+        'current_stock': 80.0,
+        'unit_price': 140.0,
+        'location': 'ممر D - رف 4',
+        'size': 'جالون 3.6 لتر',
+        'color': 'أبيض حريري',
+        'finish_type': 'نصف لمعة',
+      },
+      {
+        'code': '1010',
+        'name': 'جبس بورد مقاوم للرطوبة 12.5 مم',
+        'category': 'ألواح جبسية',
+        'unit': 'لوح',
+        'packaging_unit': 'بالتة',
+        'conversion_factor': 50.0,
+        'current_stock': 12.0,
+        'unit_price': 38.0,
+        'location': 'ممر A - رف 4',
+        'size': '1.20 * 2.40 م',
+        'color': 'أخضر',
+        'finish_type': 'مقاوم للرطوبة',
+      },
+    ]);
+
+    if (_memTransfers.isEmpty) {
+      _memTransfers.add({
+        'id': 'TR-318272',
+        'transfer_number': '318272',
+        'from_warehouse': 'القصيم',
+        'to_warehouse': 'مستودع بريدة',
+        'author': 'أمين المستودع الرئيسي',
+        'date': '01-09-2026',
+        'status': 'audited_matched',
+        'notes': 'شحنة توريد مواد ديكور وسقوف مستعارة',
+      });
+
+      _memTransferItems.addAll([
+        {
+          'id': 1,
+          'transfer_id': 'TR-318272',
+          'item_code': '154',
+          'item_name': 'بلاط دبيس مقاس 60*60',
+          'author': 'أمين المستودع',
+          'expected_qty': 200.0,
+          'actual_qty': 200.0,
+          'notes': 'مطابق للطلب',
+        },
+        {
+          'id': 2,
+          'transfer_id': 'TR-318272',
+          'item_code': '4126',
+          'item_name': 'جسر حديد معلق 4 متر',
+          'author': 'أمين المستودع',
+          'expected_qty': 10.0,
+          'actual_qty': 10.0,
+          'notes': 'تم الاستلام',
+        },
+        {
+          'id': 3,
+          'transfer_id': 'TR-318272',
+          'item_code': 'ITEM-42939',
+          'item_name': 'شيبورد بني فاتح مقاس 120 * 280',
+          'author': 'أمين المستودع',
+          'expected_qty': 1000.0,
+          'actual_qty': 1000.0,
+          'notes': 'سليم ومطابق',
+        },
+      ]);
+    }
+
+    if (_memCustomers.isEmpty) {
+      _memCustomers.addAll([
+        {
+          'id': 'CUST-1',
+          'name': 'مؤسسة المقاولات الحديثة',
+          'phone': '0551234567',
+          'total_debt': 3500.0,
+          'created_at': DateTime.now().toIso8601String(),
+        },
+        {
+          'id': 'CUST-2',
+          'name': 'شركة إطار الديكور المحدودة',
+          'phone': '0509876543',
+          'total_debt': 12450.0,
+          'created_at': DateTime.now().toIso8601String(),
+        },
+        {
+          'id': 'CUST-3',
+          'name': 'مؤسسة إعمار القصيم للتعهدات',
+          'phone': '0543219876',
+          'total_debt': 0.0,
+          'created_at': DateTime.now().toIso8601String(),
+        },
+      ]);
+    }
   }
 
   // --- CRUD Operations ---
