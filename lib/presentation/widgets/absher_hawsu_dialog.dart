@@ -178,7 +178,7 @@ class _AbsherHawsuDialogState extends State<AbsherHawsuDialog> with SingleTicker
         break;
       case 'pdf':
         final lowStockCount = provider.localItems.where((i) => i.currentStock <= 15.0).length;
-        final valuation = provider.localItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * 50.0));
+        final valuation = provider.localItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * i.unitPrice));
         await PdfReportService.printOrPreviewReport(
           items: provider.localItems,
           totalValuation: valuation,

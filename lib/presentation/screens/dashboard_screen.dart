@@ -254,7 +254,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final localItemsCount = provider.localItems.length;
           final lowStockItems = provider.localItems.where((i) => i.currentStock <= 15.0).toList();
           final lowStockCount = lowStockItems.length;
-          final totalValuation = provider.localItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * 50.0));
+          final totalValuation = provider.localItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * i.unitPrice));
 
           return SingleChildScrollView(
             padding: EdgeInsets.all(AppResponsive.space(context, 14)),

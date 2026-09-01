@@ -414,7 +414,7 @@ class _LocalStockScreenState extends State<LocalStockScreen> {
             onPressed: () async {
               final provider = Provider.of<InventoryProvider>(context, listen: false);
               final lowStockCount = provider.localItems.where((i) => i.currentStock <= 15.0).length;
-              final valuation = provider.localItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * 50.0));
+              final valuation = provider.localItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * i.unitPrice));
               await PdfReportService.printOrPreviewReport(
                 items: provider.localItems,
                 totalValuation: valuation,
@@ -483,93 +483,174 @@ class _LocalStockScreenState extends State<LocalStockScreen> {
                 child: items.isEmpty
                     ? Center(child: Text('لا توجد أصناف بالمخزون حالياً', style: TextStyle(color: AppColors.getTextSecondary(context))))
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         itemCount: items.length,
                         itemBuilder: (ctx, idx) {
                           final item = items[idx];
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 10),
+                            margin: const EdgeInsets.only(bottom: 12),
                             color: AppColors.getCardBg(context),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                               side: BorderSide(
                                 color: item.currentStock <= 15.0 ? AppColors.danger : AppColors.getBorder(context),
+                                width: item.currentStock <= 15.0 ? 1.5 : 1.0,
                               ),
                             ),
-                            child: ListTile(
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
                               onTap: () {
                                 showDialog(
                                   context: context,
                                   builder: (c) => ItemMovementDialog(item: item),
                                 );
                               },
-                              leading: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryAccent.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  'كود ${item.code}',
-                                  style: const TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                                ),
-                              ),
-                              title: Text(
-                                item.name,
-                                style: TextStyle(color: AppColors.getTextPrimary(context), fontWeight: FontWeight.bold),
-                                textAlign: TextAlign.right,
-                              ),
-                              subtitle: Text(
-                                'الفئة: ${item.category}',
-                                style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 12),
-                                textAlign: TextAlign.right,
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.qr_code, color: AppColors.info, size: 20),
-                                    tooltip: 'طباعة ستيكر الباركود الحراري',
-                                    onPressed: () async {
-                                      await BarcodeLabelService.printThermalStickerLabel(item: item);
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.history, color: AppColors.primaryAccent, size: 20),
-                                    tooltip: 'سجل حركة الصنف التفصيلي',
-                                    onPressed: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (c) => ItemMovementDialog(item: item),
-                                      );
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_note, color: AppColors.warning, size: 22),
-                                    tooltip: 'تعديل المخزون المباشر',
-                                    onPressed: () => _showAdjustStockDialog(context, item),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                                    tooltip: 'حذف الصنف من المخزن',
-                                    onPressed: () => _confirmDeleteItem(context, item),
-                                  ),
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        '${item.currentStock.toInt()} ${item.unit}',
-                                        style: TextStyle(
-                                          color: item.currentStock > 15.0 ? AppColors.success : AppColors.danger,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    // Row 1: Header (Stock Badge + Category Tag + Code)
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        // Stock Quantity Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: (item.currentStock > 15.0 ? AppColors.success : AppColors.danger).withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: item.currentStock > 15.0 ? AppColors.success : AppColors.danger,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '${item.currentStock.toInt()} ${item.unit}',
+                                            style: TextStyle(
+                                              color: item.currentStock > 15.0 ? AppColors.success : AppColors.danger,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                        // Category & Code Badges
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.getBg(context),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: AppColors.getBorder(context)),
+                                              ),
+                                              child: Text(
+                                                item.category,
+                                                style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primaryAccent.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                'كود ${item.code}',
+                                                style: const TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 10),
+
+                                    // Row 2: Full Item Name
+                                    Text(
+                                      item.name,
+                                      style: TextStyle(
+                                        color: AppColors.getTextPrimary(context),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                      textAlign: TextAlign.right,
+                                    ),
+
+                                    // Row 3: Price Info
+                                    if (item.unitPrice > 0)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          'سعر الوحدة: ${item.unitPrice.toStringAsFixed(2)} ر.س | القيمة الإجمالية: ${(item.currentStock * item.unitPrice).toStringAsFixed(2)} ر.س',
+                                          style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11),
+                                          textAlign: TextAlign.right,
                                         ),
                                       ),
-                                      const Text('الرصيد', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                                    ],
-                                  ),
-                                ],
+
+                                    Divider(height: 20, color: AppColors.getBorder(context).withOpacity(0.5)),
+
+                                    // Row 4: Action Toolbar (Spread evenly)
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        // Print Barcode
+                                        OutlinedButton.icon(
+                                          icon: const Icon(Icons.qr_code, color: AppColors.info, size: 16),
+                                          label: const Text('باركود', style: TextStyle(color: AppColors.info, fontSize: 11)),
+                                          style: OutlinedButton.styleFrom(
+                                            side: BorderSide(color: AppColors.info.withOpacity(0.5)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            minimumSize: const Size(60, 32),
+                                          ),
+                                          onPressed: () async {
+                                            await BarcodeLabelService.printThermalStickerLabel(item: item);
+                                          },
+                                        ),
+                                        // History
+                                        OutlinedButton.icon(
+                                          icon: const Icon(Icons.history, color: AppColors.primaryAccent, size: 16),
+                                          label: const Text('الحركات', style: TextStyle(color: AppColors.primaryAccent, fontSize: 11)),
+                                          style: OutlinedButton.styleFrom(
+                                            side: BorderSide(color: AppColors.primaryAccent.withOpacity(0.5)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            minimumSize: const Size(60, 32),
+                                          ),
+                                          onPressed: () {
+                                            showDialog(
+                                              context: context,
+                                              builder: (c) => ItemMovementDialog(item: item),
+                                            );
+                                          },
+                                        ),
+                                        // Edit Stock
+                                        OutlinedButton.icon(
+                                          icon: const Icon(Icons.edit_note, color: AppColors.warning, size: 16),
+                                          label: const Text('تعديل', style: TextStyle(color: AppColors.warning, fontSize: 11)),
+                                          style: OutlinedButton.styleFrom(
+                                            side: BorderSide(color: AppColors.warning.withOpacity(0.5)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            minimumSize: const Size(60, 32),
+                                          ),
+                                          onPressed: () => _showAdjustStockDialog(context, item),
+                                        ),
+                                        // Delete Item
+                                        OutlinedButton.icon(
+                                          icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 16),
+                                          label: const Text('حذف', style: TextStyle(color: AppColors.danger, fontSize: 11)),
+                                          style: OutlinedButton.styleFrom(
+                                            side: BorderSide(color: AppColors.danger.withOpacity(0.5)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            minimumSize: const Size(60, 32),
+                                          ),
+                                          onPressed: () => _confirmDeleteItem(context, item),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
