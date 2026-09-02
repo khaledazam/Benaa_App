@@ -5,6 +5,7 @@ import '../../core/services/haptics_service.dart';
 import '../../core/services/notification_service.dart';
 import '../providers/inventory_provider.dart';
 import '../../data/models/item_model.dart';
+import '../../core/services/ceiling_estimation_engine.dart';
 import 'camera_scanner_dialog.dart';
 import 'nfc_scanner_dialog.dart';
 
@@ -71,13 +72,28 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
 
     HapticsService.scanSuccess();
 
-    final unitNote = _selectedUnit != 'حبة' ? 'الوحدة: $_selectedUnit' : 'حبة فردية';
+    String unitNote = _selectedUnit != 'حبة' ? 'الوحدة: $_selectedUnit' : 'حبة فردية';
+    double actualPieces = qty;
+
+    if (_selectedUnit.contains('متر مربع') || _selectedUnit.contains('م²')) {
+      final mockItem = ItemModel(
+        code: code,
+        name: name,
+        category: 'أسقف وديكور',
+        legacyUnit: 'حبة',
+        currentStock: 0,
+        unitPrice: 0,
+      );
+      final res = CeilingEstimationEngine.calculateItemBreakdown(item: mockItem, areaM2: qty);
+      actualPieces = res.totalPieces;
+      unitNote = 'المساحة: $qty م² (${res.shortSummary})';
+    }
 
     setState(() {
       _invoiceItems.add({
         'item_code': code,
         'item_name': name,
-        'qty': qty,
+        'qty': actualPieces,
         'unit': _selectedUnit,
         'notes': unitNote,
       });
@@ -413,6 +429,47 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
                         ),
                       ],
                     ),
+
+                    if (_selectedUnit.contains('متر مربع') || _selectedUnit.contains('م²')) ...[
+                      const SizedBox(height: 8),
+                      Builder(
+                        builder: (context) {
+                          final areaVal = double.tryParse(_itemQtyController.text) ?? 0.0;
+                          final nameVal = _itemNameController.text.trim();
+                          final mockItem = ItemModel(
+                            code: _itemCodeController.text.trim(),
+                            name: nameVal.isNotEmpty ? nameVal : 'صنف ديكور',
+                            category: 'أسقف وديكور',
+                            legacyUnit: 'حبة',
+                            currentStock: 0,
+                            unitPrice: 0,
+                          );
+                          final res = CeilingEstimationEngine.calculateItemBreakdown(item: mockItem, areaM2: areaVal > 0 ? areaVal : 100.0);
+
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.success.withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.auto_awesome, color: AppColors.success, size: 16),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '📐 التفكيك الهندسي التلقائي: ${res.formattedBreakdown}',
+                                    style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 11),
+                                    textAlign: TextAlign.right,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
 
                     const SizedBox(height: 16),
 

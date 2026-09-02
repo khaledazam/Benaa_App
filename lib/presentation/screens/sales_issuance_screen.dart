@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 import '../../core/services/pdf_report_service.dart';
 import '../../data/models/product_unit_model.dart';
 import '../../core/services/unit_conversion_engine.dart';
+import '../../core/services/ceiling_estimation_engine.dart';
 import '../widgets/camera_scanner_dialog.dart';
 import '../widgets/nfc_scanner_dialog.dart';
 import '../widgets/printer_selection_dialog.dart';
@@ -74,11 +75,20 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
       return;
     }
 
-    final baseQty = UnitConversionEngine.convertToBaseUnit(
-      item: _selectedItem!,
-      unitName: unitName,
-      quantity: qty,
-    );
+    double baseQty;
+    String? breakdownSummary;
+
+    if (unitName.contains('متر مربع') || unitName.contains('م²')) {
+      final result = CeilingEstimationEngine.calculateItemBreakdown(item: _selectedItem!, areaM2: qty);
+      baseQty = result.totalPieces;
+      breakdownSummary = result.shortSummary;
+    } else {
+      baseQty = UnitConversionEngine.convertToBaseUnit(
+        item: _selectedItem!,
+        unitName: unitName,
+        quantity: qty,
+      );
+    }
 
     if (baseQty > _selectedItem!.currentStock) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -101,6 +111,7 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
         'base_qty': baseQty,
         'unit_price': price,
         'total': qty * price,
+        'breakdown_notes': breakdownSummary,
       });
       _selectedItem = null;
       _selectedUnit = null;
@@ -348,6 +359,149 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
     );
   }
 
+  void _showCeilingProjectEstimatorDialog(BuildContext context, InventoryProvider provider) {
+    final areaController = TextEditingController(text: '100');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final area = double.tryParse(areaController.text) ?? 0.0;
+          final estimate = CeilingEstimationEngine.calculateFullProject(area > 0 ? area : 0.0);
+
+          return AlertDialog(
+            backgroundColor: AppColors.getCardBg(context),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Icon(Icons.architecture, color: AppColors.success, size: 28),
+                Text(
+                  '📐 مقايسة سقف وديكور شاملة (م²)',
+                  style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'أدخل مساحة السقف بالمتر المربع وسيقوم النظام بتفكيك كافة المواد لكراتين وحبات:',
+                      style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 12),
+                      textAlign: TextAlign.right,
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: areaController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 18),
+                      textAlign: TextAlign.center,
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'المساحة بالمتر المربع (م²)',
+                        prefixIcon: Icon(Icons.square_foot, color: AppColors.success),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text('جدول المواد المفككة هندسياً:', style: TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    ...estimate.allResults.map((res) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.getBg(context),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.getBorder(context)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.success.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                res.shortSummary,
+                                style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(res.itemName, style: TextStyle(color: AppColors.getTextPrimary(context), fontWeight: FontWeight.bold, fontSize: 13)),
+                                Text('إجمالي: ${res.totalPieces.toInt()} حبة (معامل: ${res.multiplier})', style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء', style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add_shopping_cart),
+                label: const Text('📥 إضافة كافة بنود المقايسة للسلة'),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+                onPressed: () {
+                  if (area <= 0) return;
+
+                  final allItems = provider.localItems;
+
+                  for (var res in estimate.allResults) {
+                    // البحث عن صنف مطابق في المستودع أو إضافة بند
+                    final matched = allItems.where((i) {
+                      final cat = CeilingEstimationEngine.detectCategory(i);
+                      return cat == res.category;
+                    }).toList();
+
+                    final itemCode = matched.isNotEmpty ? matched.first.code : 'ITEM-${res.category.name}';
+                    final itemName = matched.isNotEmpty ? matched.first.name : res.itemName;
+                    final price = matched.isNotEmpty ? matched.first.unitPrice : 25.0;
+
+                    _cartItems.add({
+                      'item_code': itemCode,
+                      'item_name': itemName,
+                      'qty': area,
+                      'unit': 'متر مربع (م²)',
+                      'base_qty': res.totalPieces,
+                      'unit_price': price,
+                      'total': res.totalPieces * price,
+                      'breakdown_notes': res.shortSummary,
+                    });
+                  }
+
+                  HapticsService.actionSuccess();
+                  Navigator.pop(ctx);
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppColors.success,
+                      content: Text('تمت إضافة كامل بنود مقايسة ($area م²) إلى سلة المبيعات بنجاح! 📐🛒'),
+                    ),
+                  );
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -442,6 +596,11 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.architecture, color: AppColors.success),
+                          tooltip: '📐 مقايسة سقف وديكور شاملة بالمتر المربع (م²)',
+                          onPressed: () => _showCeilingProjectEstimatorDialog(context, provider),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.print_outlined, color: AppColors.primaryAccent),
                           tooltip: 'طابعة البلوتوث',
@@ -601,32 +760,60 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        DropdownButtonFormField<ProductUnitModel>(
-                          value: _selectedUnit ?? _selectedItem!.units.firstWhere((u) => u.isBase, orElse: () => _selectedItem!.units.first),
-                          dropdownColor: AppColors.bgCard,
-                          style: const TextStyle(color: AppColors.textPrimary),
-                          decoration: const InputDecoration(
-                            labelText: 'وحدة البيع المتاحة للمنتج',
-                            labelStyle: TextStyle(color: AppColors.textSecondary),
-                          ),
-                          items: _selectedItem!.units.where((u) => u.isActive).map((u) {
-                            final priceText = u.salePrice != null ? '${u.salePrice} ر.س' : '${(_selectedItem!.unitPrice * u.conversionFactor).toStringAsFixed(2)} ر.س';
-                            return DropdownMenuItem<ProductUnitModel>(
-                              value: u,
-                              child: Text(
-                                '${u.unitName} (معامل: ${u.conversionFactor} ${_selectedItem!.unit} | سعر: $priceText)',
-                                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (unit) {
-                            if (unit != null) {
-                              setState(() {
-                                _selectedUnit = unit;
-                                final calculatedPrice = unit.salePrice ?? (_selectedItem!.unitPrice * unit.conversionFactor);
-                                _priceController.text = calculatedPrice.toStringAsFixed(2);
-                              });
+                        Builder(
+                          builder: (context) {
+                            final availableUnits = List<ProductUnitModel>.from(_selectedItem!.units.where((u) => u.isActive));
+                            // إضافة خيار وحدة المتر المربع التلقائية للأصناف الهندسية
+                            if (!availableUnits.any((u) => u.unitName.contains('متر مربع') || u.unitName.contains('م²'))) {
+                              final cat = CeilingEstimationEngine.detectCategory(_selectedItem!);
+                              if (cat != CeilingItemCategory.standard) {
+                                availableUnits.add(ProductUnitModel(
+                                  id: 'm2-${_selectedItem!.code}',
+                                  productCode: _selectedItem!.code,
+                                  unitName: 'متر مربع (م²)',
+                                  unitType: UnitType.area,
+                                  conversionFactor: 1.0,
+                                  isBase: false,
+                                  salePrice: _selectedItem!.unitPrice,
+                                ));
+                              }
                             }
+
+                            return DropdownButtonFormField<ProductUnitModel>(
+                              value: _selectedUnit ?? availableUnits.firstWhere((u) => u.isBase, orElse: () => availableUnits.first),
+                              dropdownColor: AppColors.bgCard,
+                              style: const TextStyle(color: AppColors.textPrimary),
+                              decoration: const InputDecoration(
+                                labelText: 'وحدة البيع المتاحة للمنتج',
+                                labelStyle: TextStyle(color: AppColors.textSecondary),
+                              ),
+                              items: availableUnits.map((u) {
+                                final isM2 = u.unitName.contains('متر مربع') || u.unitName.contains('م²');
+                                final priceText = u.salePrice != null ? '${u.salePrice} ر.س' : '${(_selectedItem!.unitPrice * u.conversionFactor).toStringAsFixed(2)} ر.س';
+                                return DropdownMenuItem<ProductUnitModel>(
+                                  value: u,
+                                  child: Text(
+                                    isM2
+                                        ? '📐 ${u.unitName} (حساب معادلة السقف التلقائية)'
+                                        : '${u.unitName} (معامل: ${u.conversionFactor} ${_selectedItem!.unit} | سعر: $priceText)',
+                                    style: TextStyle(
+                                      color: isM2 ? AppColors.success : AppColors.textPrimary,
+                                      fontWeight: isM2 ? FontWeight.bold : FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (unit) {
+                                if (unit != null) {
+                                  setState(() {
+                                    _selectedUnit = unit;
+                                    final calculatedPrice = unit.salePrice ?? (_selectedItem!.unitPrice * unit.conversionFactor);
+                                    _priceController.text = calculatedPrice.toStringAsFixed(2);
+                                  });
+                                }
+                              },
+                            );
                           },
                         ),
                         const SizedBox(height: 10),
@@ -650,6 +837,7 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                                 controller: _qtyController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+                                onChanged: (_) => setState(() {}),
                                 decoration: InputDecoration(
                                   labelText: 'الكمية (${_selectedUnit?.unitName ?? _selectedItem!.unit})',
                                   labelStyle: const TextStyle(color: AppColors.textSecondary),
@@ -658,7 +846,39 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                             ),
                           ],
                         ),
-                        if (_selectedUnit != null && !_selectedUnit!.isBase) ...[
+                        if (_selectedUnit != null && (_selectedUnit!.unitName.contains('متر مربع') || _selectedUnit!.unitName.contains('م²'))) ...[
+                          const SizedBox(height: 8),
+                          Builder(
+                            builder: (context) {
+                              final areaVal = double.tryParse(_qtyController.text) ?? 0.0;
+                              if (areaVal > 0) {
+                                final res = CeilingEstimationEngine.calculateItemBreakdown(item: _selectedItem!, areaM2: areaVal);
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppColors.success.withOpacity(0.4)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.auto_awesome, color: AppColors.success, size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          '📐 المعادل الفعلي التلقائي: ${res.formattedBreakdown}',
+                                          style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12),
+                                          textAlign: TextAlign.right,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ] else if (_selectedUnit != null && !_selectedUnit!.isBase) ...[
                           const SizedBox(height: 6),
                           Text(
                             '💡 1 ${_selectedUnit!.unitName} = ${_selectedUnit!.conversionFactor} ${_selectedItem!.unit}',
@@ -727,7 +947,7 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                             textAlign: TextAlign.right,
                           ),
                           subtitle: Text(
-                            'الكمية: ${item['qty']} ${item['unit'] ?? ''} ${item['base_qty'] != null && item['base_qty'] != item['qty'] ? '(المكافئ: ${item['base_qty']})' : ''} | سعر الوحدة: ${item['unit_price']} ر.س',
+                            'الكمية: ${item['qty']} ${item['unit'] ?? ''} ${item['breakdown_notes'] != null ? '[المعادل: ${item['breakdown_notes']}]' : item['base_qty'] != null && item['base_qty'] != item['qty'] ? '(المكافئ: ${item['base_qty']})' : ''} | سعر الوحدة: ${item['unit_price']} ر.س',
                             style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                             textAlign: TextAlign.right,
                           ),

@@ -328,10 +328,10 @@ class PdfReportService {
                         final subtotal = qty * price;
                         return pw.TableRow(
                           children: [
-                            pw.Container(padding: const pw.EdgeInsets.all(4), child: pw.Text(item['notes'] ?? '', style: pw.TextStyle(font: font, fontSize: 8), textAlign: pw.TextAlign.center)),
+                            pw.Container(padding: const pw.EdgeInsets.all(4), child: pw.Text(item['breakdown_notes'] ?? item['notes'] ?? '', style: pw.TextStyle(font: font, fontSize: 8), textAlign: pw.TextAlign.center)),
                             pw.Container(padding: const pw.EdgeInsets.all(4), child: pw.Text(subtotal.toStringAsFixed(1), style: pw.TextStyle(font: font, fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
                             pw.Container(padding: const pw.EdgeInsets.all(4), child: pw.Text(price.toStringAsFixed(1), style: pw.TextStyle(font: font, fontSize: 8), textAlign: pw.TextAlign.center)),
-                            pw.Container(padding: const pw.EdgeInsets.all(4), child: pw.Text('${qty.toInt()}', style: pw.TextStyle(font: font, fontSize: 8), textAlign: pw.TextAlign.center)),
+                            pw.Container(padding: const pw.EdgeInsets.all(4), child: pw.Text('${qty.toInt()} ${item['unit'] ?? ''}', style: pw.TextStyle(font: font, fontSize: 8), textAlign: pw.TextAlign.center)),
                             pw.Container(padding: const pw.EdgeInsets.all(4), child: pw.Text(item['item_name'] ?? item['name'] ?? '', style: pw.TextStyle(font: font, fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
                             pw.Container(padding: const pw.EdgeInsets.all(4), child: pw.Text('${idx + 1}', style: pw.TextStyle(font: font, fontSize: 8), textAlign: pw.TextAlign.center)),
                           ],
