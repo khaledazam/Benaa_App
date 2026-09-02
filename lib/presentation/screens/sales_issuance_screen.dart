@@ -361,6 +361,37 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
 
   void _showCeilingProjectEstimatorDialog(BuildContext context, InventoryProvider provider) {
     final areaController = TextEditingController(text: '100');
+    final selectedCategories = <CeilingItemCategory>{
+      CeilingItemCategory.gypsumTiles,
+      CeilingItemCategory.mainTee,
+      CeilingItemCategory.wallAngle,
+      CeilingItemCategory.crossTee60,
+      CeilingItemCategory.crossTee120,
+    };
+
+    void addItemToCartDirect(CeilingCalculationResult res, double areaVal) {
+      if (areaVal <= 0) return;
+      final allItems = provider.localItems;
+      final matched = allItems.where((i) {
+        final cat = CeilingEstimationEngine.detectCategory(i);
+        return cat == res.category;
+      }).toList();
+
+      final itemCode = matched.isNotEmpty ? matched.first.code : 'ITEM-${res.category.name}';
+      final itemName = matched.isNotEmpty ? matched.first.name : res.itemName;
+      final price = matched.isNotEmpty ? matched.first.unitPrice : 25.0;
+
+      _cartItems.add({
+        'item_code': itemCode,
+        'item_name': itemName,
+        'qty': areaVal,
+        'unit': 'متر مربع (م²)',
+        'base_qty': res.totalPieces,
+        'unit_price': price,
+        'total': res.totalPieces * price,
+        'breakdown_notes': res.shortSummary,
+      });
+    }
 
     showDialog(
       context: context,
@@ -377,20 +408,20 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
               children: [
                 const Icon(Icons.architecture, color: AppColors.success, size: 28),
                 Text(
-                  '📐 مقايسة سقف وديكور شاملة (م²)',
+                  '📐 مقايسة سقف وديكور (م²)',
                   style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
             content: SizedBox(
-              width: 500,
+              width: 550,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'أدخل مساحة السقف بالمتر المربع وسيقوم النظام بتفكيك كافة المواد لكراتين وحبات:',
+                      'أدخل المساحة بالمتر المربع، ثم اختر إضافة بند محدد أو كافة البنود:',
                       style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 12),
                       textAlign: TextAlign.right,
                     ),
@@ -406,21 +437,61 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                         prefixIcon: Icon(Icons.square_foot, color: AppColors.success),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    const Text('جدول المواد المفككة هندسياً:', style: TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setDialogState(() {
+                              if (selectedCategories.length == estimate.allResults.length) {
+                                selectedCategories.clear();
+                              } else {
+                                selectedCategories.addAll(estimate.allResults.map((r) => r.category));
+                              }
+                            });
+                          },
+                          child: Text(
+                            selectedCategories.length == estimate.allResults.length ? 'إلغاء تحديد الكل' : 'تحديد الكل',
+                            style: const TextStyle(color: AppColors.primaryAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const Text('اختر البنود المراد إضافتها:', style: TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
                     ...estimate.allResults.map((res) {
+                      final isSelected = selectedCategories.contains(res.category);
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.getBg(context),
+                          color: isSelected ? AppColors.primaryAccent.withOpacity(0.08) : AppColors.getBg(context),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.getBorder(context)),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primaryAccent.withOpacity(0.5) : AppColors.getBorder(context),
+                          ),
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            // زر الإضافة الفورية للبند الواحد
+                            IconButton(
+                              icon: const Icon(Icons.add_shopping_cart, color: AppColors.success, size: 22),
+                              tooltip: 'إضافة هذا البند فقط للسلة',
+                              onPressed: () {
+                                if (area <= 0) return;
+                                addItemToCartDirect(res, area);
+                                HapticsService.actionSuccess();
+                                Navigator.pop(ctx);
+                                setState(() {});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: AppColors.success,
+                                    content: Text('تمت إضافة [${res.itemName}] (${res.shortSummary}) إلى السلة! 🛒'),
+                                  ),
+                                );
+                              },
+                            ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
@@ -432,12 +503,26 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                                 style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12),
                               ),
                             ),
+                            const Spacer(),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(res.itemName, style: TextStyle(color: AppColors.getTextPrimary(context), fontWeight: FontWeight.bold, fontSize: 13)),
                                 Text('إجمالي: ${res.totalPieces.toInt()} حبة (معامل: ${res.multiplier})', style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11)),
                               ],
+                            ),
+                            Checkbox(
+                              value: isSelected,
+                              activeColor: AppColors.primaryAccent,
+                              onChanged: (val) {
+                                setDialogState(() {
+                                  if (val == true) {
+                                    selectedCategories.add(res.category);
+                                  } else {
+                                    selectedCategories.remove(res.category);
+                                  }
+                                });
+                              },
                             ),
                           ],
                         ),
@@ -453,47 +538,36 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                 child: const Text('إلغاء', style: TextStyle(color: AppColors.textSecondary)),
               ),
               ElevatedButton.icon(
-                icon: const Icon(Icons.add_shopping_cart),
-                label: const Text('📥 إضافة كافة بنود المقايسة للسلة'),
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-                onPressed: () {
-                  if (area <= 0) return;
+                icon: const Icon(Icons.done_all),
+                label: Text(
+                  selectedCategories.length == estimate.allResults.length
+                      ? '📥 إضافة كافة بنود المقايسة للسلة'
+                      : '📥 إضافة البنود المحددة (${selectedCategories.length}) للسلة',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: selectedCategories.isNotEmpty ? AppColors.success : AppColors.textSecondary,
+                ),
+                onPressed: selectedCategories.isEmpty
+                    ? null
+                    : () {
+                        if (area <= 0) return;
 
-                  final allItems = provider.localItems;
+                        for (var res in estimate.allResults) {
+                          if (selectedCategories.contains(res.category)) {
+                            addItemToCartDirect(res, area);
+                          }
+                        }
 
-                  for (var res in estimate.allResults) {
-                    // البحث عن صنف مطابق في المستودع أو إضافة بند
-                    final matched = allItems.where((i) {
-                      final cat = CeilingEstimationEngine.detectCategory(i);
-                      return cat == res.category;
-                    }).toList();
-
-                    final itemCode = matched.isNotEmpty ? matched.first.code : 'ITEM-${res.category.name}';
-                    final itemName = matched.isNotEmpty ? matched.first.name : res.itemName;
-                    final price = matched.isNotEmpty ? matched.first.unitPrice : 25.0;
-
-                    _cartItems.add({
-                      'item_code': itemCode,
-                      'item_name': itemName,
-                      'qty': area,
-                      'unit': 'متر مربع (م²)',
-                      'base_qty': res.totalPieces,
-                      'unit_price': price,
-                      'total': res.totalPieces * price,
-                      'breakdown_notes': res.shortSummary,
-                    });
-                  }
-
-                  HapticsService.actionSuccess();
-                  Navigator.pop(ctx);
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: AppColors.success,
-                      content: Text('تمت إضافة كامل بنود مقايسة ($area م²) إلى سلة المبيعات بنجاح! 📐🛒'),
-                    ),
-                  );
-                },
+                        HapticsService.actionSuccess();
+                        Navigator.pop(ctx);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: AppColors.success,
+                            content: Text('تمت إضافة (${selectedCategories.length}) بنود من مقايسة ($area م²) إلى السلة! 📐🛒'),
+                          ),
+                        );
+                      },
               ),
             ],
           );
