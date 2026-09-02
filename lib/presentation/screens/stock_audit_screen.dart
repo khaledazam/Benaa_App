@@ -29,7 +29,9 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<InventoryProvider>(context, listen: false).loadLocalItems();
+      final p = Provider.of<InventoryProvider>(context, listen: false);
+      p.loadLocalItems();
+      p.loadAuditLogs();
     });
   }
 
@@ -37,6 +39,7 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
   void dispose() {
     _countedQtyController.dispose();
     _notesController.dispose();
+    _auditSearchController.dispose();
     super.dispose();
   }
 
@@ -92,6 +95,16 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
       body: Consumer<InventoryProvider>(
         builder: (context, provider, child) {
           final items = provider.localItems;
+          final allLogs = provider.auditLogs;
+
+          final filteredLogs = allLogs.where((log) {
+            final dateStr = log['audit_date']?.toString() ?? '';
+            return PeriodArchiveFilterService.isDateStringInPeriod(
+              dateStr: dateStr,
+              periodType: _archivePeriod,
+              customRange: _customDateRange,
+            );
+          }).toList();
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -101,10 +114,10 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
                 ArchivePeriodSelectorBar(
                   currentPeriod: _archivePeriod,
                   customDateRange: _customDateRange,
-                  totalCount: items.length,
-                  totalAmount: items.fold(0.0, (sum, i) => sum + (i.currentStock * i.unitPrice)),
-                  countLabel: 'أصناف المستودع',
-                  amountLabel: 'تقييم المخزون المجرود',
+                  totalCount: filteredLogs.length,
+                  totalAmount: 0.0,
+                  countLabel: 'عمليات الجرد المنفذة',
+                  amountLabel: 'الإجمالي',
                   onPeriodChanged: (selectedType, range) {
                     setState(() {
                       _archivePeriod = selectedType;
@@ -326,6 +339,107 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
                     ),
                   ),
                 ],
+
+                const SizedBox(height: 28),
+
+                // Audit History Section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      PeriodArchiveFilterService.getPeriodTitle(_archivePeriod, customRange: _customDateRange),
+                      style: const TextStyle(color: AppColors.primaryAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      '📋 سجل عمليات الجرد المنفذة (${filteredLogs.length})',
+                      style: TextStyle(
+                        color: AppColors.getTextPrimary(context),
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (filteredLogs.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.getCardBg(context),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.getBorder(context)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.inventory_2_outlined, color: AppColors.textSecondary, size: 36),
+                        const SizedBox(height: 8),
+                        Text(
+                          'لا توجد عمليات جرد مسجلة في هذه الفترة المحددة.',
+                          style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ...filteredLogs.map((log) {
+                    final variance = (log['variance'] as num?)?.toDouble() ?? 0.0;
+                    final isMatched = variance == 0.0;
+
+                    return Card(
+                      color: AppColors.getCardBg(context),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: AppColors.getBorder(context)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: (isMatched ? AppColors.success : AppColors.danger).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                isMatched ? 'مطابق ✅' : 'فارق: ${variance > 0 ? "+" : ""}$variance',
+                                style: TextStyle(
+                                  color: isMatched ? AppColors.success : AppColors.danger,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  log['item_name']?.toString() ?? 'صنف',
+                                  style: TextStyle(
+                                    color: AppColors.getTextPrimary(context),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'كود: ${log['item_code']} | التاريخ: ${log['audit_date']} | جرد: ${log['counted_qty']}',
+                                  style: TextStyle(
+                                    color: AppColors.getTextSecondary(context),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
               ],
             ),
           );

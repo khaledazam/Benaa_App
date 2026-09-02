@@ -29,6 +29,7 @@ class DBHelper {
   final List<Map<String, dynamic>> _memReturnItems = [];
   final List<Map<String, dynamic>> _memCustomers = [];
   final List<Map<String, dynamic>> _memCustomerPayments = [];
+  final List<Map<String, dynamic>> _memAuditLogs = [];
 
   Future<Database?> get database async {
     if (kIsWeb) {
@@ -326,7 +327,7 @@ class DBHelper {
         'from_warehouse': 'القصيم',
         'to_warehouse': 'مستودع بريدة',
         'author': 'أمين المستودع الرئيسي',
-        'date': '01-09-2026',
+        'date': '2026-09-01',
         'status': 'audited_matched',
         'notes': 'شحنة توريد مواد ديكور وسقوف مستعارة',
       });
@@ -749,12 +750,27 @@ class DBHelper {
   }
 
   Future<void> recordLocalStockAudit(String itemCode, String itemName, double systemQty, double countedQty, String? notes) async {
+    final nowIso = DateTime.now().toIso8601String().split('T').first;
+    final auditNumber = 'AUD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final variance = countedQty - systemQty;
+
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       final idx = _memItems.indexWhere((i) => i['code'] == itemCode);
       if (idx != -1) {
         _memItems[idx]['current_stock'] = countedQty;
       }
+      _memAuditLogs.insert(0, {
+        'id': _memAuditLogs.length + 1,
+        'audit_number': auditNumber,
+        'audit_date': nowIso,
+        'item_code': itemCode,
+        'item_name': itemName,
+        'system_qty': systemQty,
+        'counted_qty': countedQty,
+        'variance': variance,
+        'notes': notes ?? '',
+      });
       return;
     }
 
@@ -765,8 +781,32 @@ class DBHelper {
         where: 'code = ?',
         whereArgs: [itemCode],
       );
+
+      await db.insert('audit_logs', {
+        'audit_number': auditNumber,
+        'audit_date': nowIso,
+        'item_code': itemCode,
+        'item_name': itemName,
+        'system_qty': systemQty,
+        'counted_qty': countedQty,
+        'variance': variance,
+        'notes': notes ?? '',
+      });
     } catch (e) {
       debugPrint("Error recording local stock audit in SQLite: $e");
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAuditLogs() async {
+    final db = await database;
+    if (db == null || _isInMemoryFallback) {
+      return List<Map<String, dynamic>>.from(_memAuditLogs);
+    }
+    try {
+      return await db.query('audit_logs', orderBy: 'id DESC');
+    } catch (e) {
+      debugPrint("Error fetching audit logs from SQLite: $e");
+      return [];
     }
   }
 

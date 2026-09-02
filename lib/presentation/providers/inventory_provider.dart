@@ -15,6 +15,7 @@ class InventoryProvider extends ChangeNotifier {
   TransferModel? _selectedTransfer;
   List<ItemModel> _localItems = [];
   List<ReturnInvoiceModel> _returns = [];
+  List<Map<String, dynamic>> _auditLogs = [];
   bool _isLoading = false;
   String _searchQuery = '';
 
@@ -23,6 +24,7 @@ class InventoryProvider extends ChangeNotifier {
   TransferModel? get selectedTransfer => _selectedTransfer;
   List<ItemModel> get localItems => _localItems;
   List<ReturnInvoiceModel> get returns => _returns;
+  List<Map<String, dynamic>> get auditLogs => _auditLogs;
   bool get isLoading => _isLoading;
   String get searchQuery => _searchQuery;
 
@@ -139,8 +141,14 @@ class InventoryProvider extends ChangeNotifier {
     await loadLocalItems();
   }
 
+  Future<void> loadAuditLogs() async {
+    _auditLogs = await _dbHelper.getAuditLogs();
+    notifyListeners();
+  }
+
   Future<void> recordPeriodicAudit(String itemCode, String itemName, double systemQty, double countedQty, String? notes) async {
     await _dbHelper.recordLocalStockAudit(itemCode, itemName, systemQty, countedQty, notes);
+    await loadAuditLogs();
     await loadLocalItems();
   }
 
