@@ -1040,6 +1040,8 @@ class DBHelper {
       for (var item in items) {
         final itemCode = item['item_code'].toString();
         final qty = (item['qty'] as num).toDouble();
+        final unit = item['unit']?.toString() ?? 'حبة';
+        final baseQty = (item['base_qty'] as num?)?.toDouble() ?? qty;
 
         _memSaleItems.add({
           'sale_id': id,
@@ -1054,6 +1056,20 @@ class DBHelper {
           final current = (_memItems[idx]['current_stock'] as num).toDouble();
           _memItems[idx]['current_stock'] = (current - qty).clamp(0.0, double.infinity);
         }
+
+        // Post stock movement snapshot in memory
+        await postStockMovement(StockMovementSnapshot(
+          transactionId: 'MOV-SALE-${DateTime.now().millisecondsSinceEpoch}-$itemCode',
+          transactionType: 'مبيعات (صرف عميل)',
+          productCode: itemCode,
+          enteredQuantity: qty,
+          enteredUnit: unit,
+          conversionFactor: qty > 0 ? baseQty / qty : 1.0,
+          baseQuantity: baseQty,
+          baseUnit: unit,
+          date: date,
+          notes: 'فاتورة مبيعات #$invoiceNumber - العميل: $shopName',
+        ));
       }
       return;
     }
@@ -1074,6 +1090,8 @@ class DBHelper {
       for (var item in items) {
         final itemCode = item['item_code'].toString();
         final qty = (item['qty'] as num).toDouble();
+        final unit = item['unit']?.toString() ?? 'حبة';
+        final baseQty = (item['base_qty'] as num?)?.toDouble() ?? qty;
 
         await db.insert('sale_items', {
           'sale_id': id,
@@ -1088,6 +1106,20 @@ class DBHelper {
           SET current_stock = current_stock - ? 
           WHERE code = ?
         ''', [qty, itemCode]);
+
+        // Post stock movement snapshot in database
+        await postStockMovement(StockMovementSnapshot(
+          transactionId: 'MOV-SALE-${DateTime.now().millisecondsSinceEpoch}-$itemCode',
+          transactionType: 'مبيعات (صرف عميل)',
+          productCode: itemCode,
+          enteredQuantity: qty,
+          enteredUnit: unit,
+          conversionFactor: qty > 0 ? baseQty / qty : 1.0,
+          baseQuantity: baseQty,
+          baseUnit: unit,
+          date: date,
+          notes: 'فاتورة مبيعات #$invoiceNumber - العميل: $shopName',
+        ));
       }
     } catch (e) {
       debugPrint("Error creating sale order in SQLite: $e");
@@ -1145,13 +1177,15 @@ class DBHelper {
       for (var item in items) {
         final itemCode = item['item_code'].toString();
         final baseQty = (item['base_qty'] as num).toDouble();
+        final returnedQty = (item['returned_qty'] as num).toDouble();
+        final unit = item['unit']?.toString() ?? 'حبة';
 
         _memReturnItems.add({
           'return_id': id,
           'item_code': itemCode,
           'item_name': item['item_name'],
-          'returned_qty': (item['returned_qty'] as num).toDouble(),
-          'unit': item['unit'],
+          'returned_qty': returnedQty,
+          'unit': unit,
           'base_qty': baseQty,
           'unit_price': (item['unit_price'] as num).toDouble(),
           'reason': item['reason'],
@@ -1163,6 +1197,19 @@ class DBHelper {
           final newStock = returnType == 'sales' ? currentStock + baseQty : currentStock - baseQty;
           _memItems[existingItemIndex]['current_stock'] = newStock > 0 ? newStock : 0.0;
         }
+
+        await postStockMovement(StockMovementSnapshot(
+          transactionId: 'MOV-RET-${DateTime.now().millisecondsSinceEpoch}-$itemCode',
+          transactionType: returnType == 'sales' ? 'مرتجع مبيعات (وارد +)' : 'مرتجع مشتريات (منصرف -)',
+          productCode: itemCode,
+          enteredQuantity: returnedQty,
+          enteredUnit: unit,
+          conversionFactor: returnedQty > 0 ? baseQty / returnedQty : 1.0,
+          baseQuantity: baseQty,
+          baseUnit: unit,
+          date: date,
+          notes: 'فاتورة مرتجع #$returnNumber - $partyName | ${item['reason'] ?? ''}',
+        ));
       }
       return;
     }
@@ -1182,13 +1229,15 @@ class DBHelper {
       for (var item in items) {
         final itemCode = item['item_code'].toString();
         final baseQty = (item['base_qty'] as num).toDouble();
+        final returnedQty = (item['returned_qty'] as num).toDouble();
+        final unit = item['unit']?.toString() ?? 'حبة';
 
         await db.insert('return_items', {
           'return_id': id,
           'item_code': itemCode,
           'item_name': item['item_name'],
-          'returned_qty': (item['returned_qty'] as num).toDouble(),
-          'unit': item['unit'],
+          'returned_qty': returnedQty,
+          'unit': unit,
           'base_qty': baseQty,
           'unit_price': (item['unit_price'] as num).toDouble(),
           'reason': item['reason'],
@@ -1207,6 +1256,19 @@ class DBHelper {
             WHERE code = ?
           ''', [baseQty, baseQty, itemCode]);
         }
+
+        await postStockMovement(StockMovementSnapshot(
+          transactionId: 'MOV-RET-${DateTime.now().millisecondsSinceEpoch}-$itemCode',
+          transactionType: returnType == 'sales' ? 'مرتجع مبيعات (وارد +)' : 'مرتجع مشتريات (منصرف -)',
+          productCode: itemCode,
+          enteredQuantity: returnedQty,
+          enteredUnit: unit,
+          conversionFactor: returnedQty > 0 ? baseQty / returnedQty : 1.0,
+          baseQuantity: baseQty,
+          baseUnit: unit,
+          date: date,
+          notes: 'فاتورة مرتجع #$returnNumber - $partyName | ${item['reason'] ?? ''}',
+        ));
       }
     } catch (e) {
       debugPrint("Error creating return invoice in SQLite: $e");
