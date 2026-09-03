@@ -220,7 +220,7 @@ class DBHelper {
   }
 
   // --- Web / Fallback In-Memory Initializer & Local Storage Persistence ---
-  void _initMemData() {
+  Future<void> _initMemData() async {
     if (_isMemInitialized) return;
     _isMemInitialized = true;
 
@@ -229,7 +229,7 @@ class DBHelper {
       return;
     }
 
-    _loadMemStateFromPrefs();
+    await _loadMemStateFromPrefs();
   }
 
   void _clearAllMemLists() {
@@ -507,7 +507,7 @@ class DBHelper {
   Future<List<TransferModel>> getTransfers() async {
     final db = await database;
     if (db == null || _isInMemoryFallback) {
-      _initMemData();
+      await _initMemData();
       List<TransferModel> result = [];
       for (var map in _memTransfers) {
         final tId = map['id'].toString();
@@ -542,7 +542,7 @@ class DBHelper {
   Future<TransferModel?> getTransferById(String id) async {
     final db = await database;
     if (db == null || _isInMemoryFallback) {
-      _initMemData();
+      await _initMemData();
       final maps = _memTransfers.where((t) => t['id'] == id).toList();
       if (maps.isEmpty) return null;
       final itemsMap = _memTransferItems.where((i) => i['transfer_id'] == id).toList();
@@ -597,7 +597,7 @@ class DBHelper {
   Future<void> confirmTransferAudit(String transferId, String status) async {
     final db = await database;
     if (db == null || _isInMemoryFallback) {
-      _initMemData();
+      await _initMemData();
       final idx = _memTransfers.indexWhere((t) => t['id'] == transferId);
       if (idx != -1) {
         final currentStatus = (_memTransfers[idx]['status'] ?? '').toString();
@@ -734,7 +734,7 @@ class DBHelper {
   Future<List<ItemModel>> getLocalItems() async {
     final db = await database;
     if (db == null || _isInMemoryFallback) {
-      _initMemData();
+      await _initMemData();
       List<ItemModel> result = [];
       for (var map in _memItems) {
         final code = map['code'].toString();
@@ -769,7 +769,7 @@ class DBHelper {
   Future<List<ProductUnitModel>> getProductUnits(String productCode) async {
     final db = await database;
     if (db == null || _isInMemoryFallback) {
-      _initMemData();
+      await _initMemData();
       final maps = _memProductUnits.where((u) => u['product_code'] == productCode).toList();
       if (maps.isNotEmpty) {
         return maps.map((m) => ProductUnitModel.fromMap(m)).toList();
@@ -1461,6 +1461,7 @@ class DBHelper {
 
   Future<List<Map<String, dynamic>>> getReturnInvoices() async {
     if (_database == null || _isInMemoryFallback) {
+      await _initMemData();
       return List.from(_memReturns);
     }
     final db = await database;
