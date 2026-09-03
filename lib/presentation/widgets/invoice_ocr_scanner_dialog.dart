@@ -18,6 +18,7 @@ class _InvoiceOcrScannerDialogState extends State<InvoiceOcrScannerDialog> {
   bool _isTorchOn = false;
   bool _isProcessing = false;
   final TextEditingController _rawTextController = TextEditingController();
+  String? _lastDetectedRawCode;
 
   @override
   void initState() {
@@ -204,10 +205,13 @@ class _InvoiceOcrScannerDialogState extends State<InvoiceOcrScannerDialog> {
                     child: MobileScanner(
                       controller: _controller,
                       onDetect: (capture) {
-                        if (!_isProcessing && capture.barcodes.isNotEmpty) {
+                        if (capture.barcodes.isNotEmpty) {
                           final code = capture.barcodes.first.rawValue;
                           if (code != null && code.isNotEmpty) {
-                            _processOcrText(code);
+                            _lastDetectedRawCode = code;
+                            if (!_isProcessing) {
+                              _processOcrText(code);
+                            }
                           }
                         }
                       },
@@ -323,9 +327,11 @@ class _InvoiceOcrScannerDialogState extends State<InvoiceOcrScannerDialog> {
                     icon: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
                     label: const Text('التقاط ومسح', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     onPressed: () {
-                      // Trigger OCR on current frame or fallback sample
-                      final sample = InvoiceOcrParserService.getSampleInvoices().first['raw_text'];
-                      _processOcrText(sample);
+                      if (_lastDetectedRawCode != null && _lastDetectedRawCode!.isNotEmpty) {
+                        _processOcrText(_lastDetectedRawCode!);
+                      } else {
+                        _showManualTextInput();
+                      }
                     },
                   ),
 

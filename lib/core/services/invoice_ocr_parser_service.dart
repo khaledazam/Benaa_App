@@ -1,11 +1,18 @@
+import 'dart:convert';
 import 'dart:math';
 import '../../data/models/ocr_scanned_invoice_model.dart';
 
 class InvoiceOcrParserService {
-  /// Parse raw OCR text into a structured OcrScannedInvoiceModel
+  /// Parse raw OCR text or scanned QR code into a structured OcrScannedInvoiceModel
   static OcrScannedInvoiceModel parseInvoiceText(String rawText) {
     if (rawText.trim().isEmpty) {
       return _generateDefaultEmptyInvoice();
+    }
+
+    // 1. Check if the scanned string is a ZATCA Base64 TLV electronic invoice QR code
+    final zatcaModel = _tryParseZatcaTlv(rawText);
+    if (zatcaModel != null) {
+      return zatcaModel;
     }
 
     final lines = rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
@@ -59,6 +66,69 @@ class InvoiceOcrParserService {
       items: items,
       rawText: rawText,
     );
+  }
+
+  /// Decode Saudi ZATCA TLV Base64 electronic invoice QR codes
+  static OcrScannedInvoiceModel? _tryParseZatcaTlv(String raw) {
+    try {
+      final clean = raw.trim();
+      if (!clean.startsWith('AQ') && clean.length < 20) return null;
+
+      final bytes = base64Decode(clean);
+      int offset = 0;
+      String? sellerName;
+      String? vatNumber;
+      String? timestampStr;
+      String? totalStr;
+      String? vatAmountStr;
+
+      while (offset < bytes.length) {
+        if (offset + 2 > bytes.length) break;
+        int tag = bytes[offset];
+        int length = bytes[offset + 1];
+        offset += 2;
+        if (offset + length > bytes.length) break;
+        final val = utf8.decode(bytes.sublist(offset, offset + length));
+        offset += length;
+
+        if (tag == 1) sellerName = val;
+        else if (tag == 2) vatNumber = val;
+        else if (tag == 3) timestampStr = val;
+        else if (tag == 4) totalStr = val;
+        else if (tag == 5) vatAmountStr = val;
+      }
+
+      if (sellerName != null || totalStr != null) {
+        final total = double.tryParse(totalStr ?? '0') ?? 0.0;
+        final tax = double.tryParse(vatAmountStr ?? '0') ?? (total * 15 / 115);
+        final subtotal = total - tax;
+        final date = timestampStr != null ? (DateTime.tryParse(timestampStr) ?? DateTime.now()) : DateTime.now();
+
+        return OcrScannedInvoiceModel(
+          invoiceNumber: 'ZATCA-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+          partyName: sellerName ?? 'مورد معتمد (فاتورة إلكترونية)',
+          partyType: 'مورد',
+          date: date,
+          subtotal: double.parse(subtotal.toStringAsFixed(2)),
+          taxRate: 0.15,
+          taxAmount: double.parse(tax.toStringAsFixed(2)),
+          totalAmount: double.parse(total.toStringAsFixed(2)),
+          confidenceScore: 0.98,
+          items: [
+            ScannedInvoiceItem(
+              itemCode: 'ITM-ZATCA-1',
+              itemName: 'بضاعة وفاتورة توريد مشتريات ($sellerName)',
+              quantity: 1.0,
+              unit: 'شحنة',
+              unitPrice: subtotal,
+              totalPrice: subtotal,
+            ),
+          ],
+          rawText: 'ZATCA QR Scanned:\nالمورد: $sellerName\nالرقم الضريبي: $vatNumber\nالإجمالي: $total ر.س\nالضريبة: $tax ر.س',
+        );
+      }
+    } catch (_) {}
+    return null;
   }
 
   static String _extractInvoiceNumber(String text, List<String> lines) {
