@@ -512,12 +512,15 @@ class DBHelper {
               (name.isNotEmpty && n == name.toLowerCase());
         });
 
+        String finalCode = code;
         if (itemIdx != -1) {
           final oldStock = (_memItems[itemIdx]['current_stock'] as num).toDouble();
           _memItems[itemIdx]['current_stock'] = oldStock + actualQty;
+          finalCode = _memItems[itemIdx]['code'].toString();
         } else {
+          finalCode = code.isNotEmpty ? code : 'ITEM-${DateTime.now().millisecondsSinceEpoch % 100000}';
           _memItems.add({
-            'code': code.isNotEmpty ? code : 'ITEM-${DateTime.now().millisecondsSinceEpoch % 100000}',
+            'code': finalCode,
             'name': name.isNotEmpty ? name : 'صنف جديد',
             'category': 'عام',
             'unit': 'حبة',
@@ -528,6 +531,19 @@ class DBHelper {
             'location': 'ممر A - رف 1',
           });
         }
+
+        await postStockMovement(StockMovementSnapshot(
+          transactionId: 'MOV-TRF-${DateTime.now().millisecondsSinceEpoch}-$finalCode',
+          transactionType: 'إذن توريد / استلام شحنة (+)',
+          productCode: finalCode,
+          enteredQuantity: actualQty,
+          enteredUnit: 'حبة',
+          conversionFactor: 1.0,
+          baseQuantity: actualQty,
+          baseUnit: 'حبة',
+          date: DateTime.now().toIso8601String().split('T').first,
+          notes: 'إذن توريد واستلام بضاعة بالمستودع',
+        ));
       }
       return;
     }
@@ -561,18 +577,20 @@ class DBHelper {
           whereArgs: [itemCode, itemName.toLowerCase()],
         );
 
+        String finalCode = itemCode;
         if (existing.isNotEmpty) {
-          final existingCode = existing.first['code'].toString();
+          finalCode = existing.first['code'].toString();
           await db.rawUpdate('''
             UPDATE items 
             SET current_stock = current_stock + ? 
             WHERE code = ?
-          ''', [actualQty, existingCode]);
+          ''', [actualQty, finalCode]);
         } else {
+          finalCode = itemCode.isNotEmpty ? itemCode : 'ITEM-${DateTime.now().millisecondsSinceEpoch % 100000}';
           await db.insert(
             'items',
             {
-              'code': itemCode.isNotEmpty ? itemCode : 'ITEM-${DateTime.now().millisecondsSinceEpoch % 100000}',
+              'code': finalCode,
               'name': itemName.isNotEmpty ? itemName : 'صنف جديد',
               'category': 'عام',
               'unit': 'حبة',
@@ -585,6 +603,19 @@ class DBHelper {
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }
+
+        await postStockMovement(StockMovementSnapshot(
+          transactionId: 'MOV-TRF-${DateTime.now().millisecondsSinceEpoch}-$finalCode',
+          transactionType: 'إذن توريد / استلام شحنة (+)',
+          productCode: finalCode,
+          enteredQuantity: actualQty,
+          enteredUnit: 'حبة',
+          conversionFactor: 1.0,
+          baseQuantity: actualQty,
+          baseUnit: 'حبة',
+          date: DateTime.now().toIso8601String().split('T').first,
+          notes: 'إذن توريد واستلام بضاعة بالمستودع',
+        ));
       }
     } catch (e) {
       debugPrint("Error confirming transfer audit in SQLite: $e");
@@ -989,16 +1020,40 @@ class DBHelper {
   }
 
   Future<void> updateItemStockDirectly(String itemCode, double newStock, String reasonNote) async {
+    final nowIso = DateTime.now().toIso8601String().split('T').first;
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       final idx = _memItems.indexWhere((i) => i['code'] == itemCode);
+      double oldStock = 0.0;
       if (idx != -1) {
+        oldStock = (_memItems[idx]['current_stock'] as num).toDouble();
         _memItems[idx]['current_stock'] = newStock;
+      }
+      final diff = newStock - oldStock;
+      if (diff != 0) {
+        await postStockMovement(StockMovementSnapshot(
+          transactionId: 'MOV-ADJ-${DateTime.now().millisecondsSinceEpoch}-$itemCode',
+          transactionType: diff > 0 ? 'إذن توريد / إضافة مخزون (+)' : 'تسوية / صرف مخزون (-)',
+          productCode: itemCode,
+          enteredQuantity: diff.abs(),
+          enteredUnit: 'حبة',
+          conversionFactor: 1.0,
+          baseQuantity: diff.abs(),
+          baseUnit: 'حبة',
+          date: nowIso,
+          notes: reasonNote.isNotEmpty ? reasonNote : 'تعديل رصيد المخزون مباشرة',
+        ));
       }
       return;
     }
 
     try {
+      final existing = await db.query('items', where: 'code = ?', whereArgs: [itemCode]);
+      double oldStock = 0.0;
+      if (existing.isNotEmpty) {
+        oldStock = (existing.first['current_stock'] as num).toDouble();
+      }
+
       await db.update(
         'items',
         {'current_stock': newStock},
@@ -1008,14 +1063,30 @@ class DBHelper {
 
       await db.insert('audit_logs', {
         'audit_number': 'ADJ-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-        'audit_date': DateTime.now().toIso8601String().split('T').first,
+        'audit_date': nowIso,
         'item_code': itemCode,
         'item_name': 'تعديل مخزون مباشر',
-        'system_qty': 0,
+        'system_qty': oldStock,
         'counted_qty': newStock,
-        'variance': 0,
+        'variance': newStock - oldStock,
         'notes': reasonNote,
       });
+
+      final diff = newStock - oldStock;
+      if (diff != 0) {
+        await postStockMovement(StockMovementSnapshot(
+          transactionId: 'MOV-ADJ-${DateTime.now().millisecondsSinceEpoch}-$itemCode',
+          transactionType: diff > 0 ? 'إذن توريد / إضافة مخزون (+)' : 'تسوية / صرف مخزون (-)',
+          productCode: itemCode,
+          enteredQuantity: diff.abs(),
+          enteredUnit: 'حبة',
+          conversionFactor: 1.0,
+          baseQuantity: diff.abs(),
+          baseUnit: 'حبة',
+          date: nowIso,
+          notes: reasonNote.isNotEmpty ? reasonNote : 'تعديل رصيد المخزون مباشرة',
+        ));
+      }
     } catch (e) {
       debugPrint("Error updating item stock directly in SQLite: $e");
     }
