@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../../data/models/item_model.dart';
@@ -16,6 +18,8 @@ class DBHelper {
 
   static Database? _database;
   bool _isInMemoryFallback = false;
+  bool _isClearedPermanently = false;
+  bool _isMemInitialized = false;
 
   // In-memory fallback structures for web/testing or SQLite failures
   final List<Map<String, dynamic>> _memItems = [];
@@ -215,9 +219,114 @@ class DBHelper {
     // Production Mode: Clean Empty Initial State
   }
 
-  // --- Web / Fallback In-Memory Initializer ---
+  // --- Web / Fallback In-Memory Initializer & Local Storage Persistence ---
   void _initMemData() {
-    if (_memItems.isNotEmpty) return;
+    if (_isMemInitialized) return;
+    _isMemInitialized = true;
+
+    if (_isClearedPermanently) {
+      _clearAllMemLists();
+      return;
+    }
+
+    _loadMemStateFromPrefs();
+  }
+
+  void _clearAllMemLists() {
+    _memItems.clear();
+    _memTransfers.clear();
+    _memTransferItems.clear();
+    _memSales.clear();
+    _memSaleItems.clear();
+    _memProductUnits.clear();
+    _memStockMovements.clear();
+    _memReturns.clear();
+    _memReturnItems.clear();
+    _memCustomers.clear();
+    _memCustomerPayments.clear();
+    _memAuditLogs.clear();
+  }
+
+  Future<void> _loadMemStateFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isCleared = prefs.getBool('benaa_db_cleared') ?? false;
+      if (isCleared) {
+        _isClearedPermanently = true;
+        _clearAllMemLists();
+        return;
+      }
+
+      final itemsJson = prefs.getString('benaa_mem_items');
+      if (itemsJson != null && itemsJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(itemsJson);
+        _memItems.clear();
+        _memItems.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
+      } else if (_memItems.isEmpty && !_isClearedPermanently) {
+        _seedDefaultDemoData();
+      }
+
+      final transfersJson = prefs.getString('benaa_mem_transfers');
+      if (transfersJson != null && transfersJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(transfersJson);
+        _memTransfers.clear();
+        _memTransfers.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
+      }
+
+      final transferItemsJson = prefs.getString('benaa_mem_transfer_items');
+      if (transferItemsJson != null && transferItemsJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(transferItemsJson);
+        _memTransferItems.clear();
+        _memTransferItems.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
+      }
+
+      final salesJson = prefs.getString('benaa_mem_sales');
+      if (salesJson != null && salesJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(salesJson);
+        _memSales.clear();
+        _memSales.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
+      }
+
+      final movementsJson = prefs.getString('benaa_mem_movements');
+      if (movementsJson != null && movementsJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(movementsJson);
+        _memStockMovements.clear();
+        _memStockMovements.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
+      }
+
+      final customersJson = prefs.getString('benaa_mem_customers');
+      if (customersJson != null && customersJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(customersJson);
+        _memCustomers.clear();
+        _memCustomers.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
+      }
+    } catch (e) {
+      debugPrint("Error loading persistent state: $e");
+      if (_memItems.isEmpty && !_isClearedPermanently) {
+        _seedDefaultDemoData();
+      }
+    }
+  }
+
+  Future<void> _saveMemStateToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('benaa_db_cleared', _isClearedPermanently);
+      if (!_isClearedPermanently) {
+        await prefs.setString('benaa_mem_items', jsonEncode(_memItems));
+        await prefs.setString('benaa_mem_transfers', jsonEncode(_memTransfers));
+        await prefs.setString('benaa_mem_transfer_items', jsonEncode(_memTransferItems));
+        await prefs.setString('benaa_mem_sales', jsonEncode(_memSales));
+        await prefs.setString('benaa_mem_movements', jsonEncode(_memStockMovements));
+        await prefs.setString('benaa_mem_customers', jsonEncode(_memCustomers));
+      }
+    } catch (e) {
+      debugPrint("Error saving persistent state: $e");
+    }
+  }
+
+  void _seedDefaultDemoData() {
+    if (_isClearedPermanently || _memItems.isNotEmpty) return;
 
     _memItems.addAll([
       {
@@ -971,6 +1080,8 @@ class DBHelper {
           'location': location,
         });
       }
+      _isClearedPermanently = false;
+      await _saveMemStateToPrefs();
       return;
     }
 
@@ -1014,6 +1125,8 @@ class DBHelper {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
+      _isClearedPermanently = false;
+      await _saveMemStateToPrefs();
     } catch (e) {
       debugPrint("Error in registerOrUpdateLocalItem SQLite: $e");
     }
@@ -1375,6 +1488,9 @@ class DBHelper {
   }
 
   Future<void> clearAllDatabaseData() async {
+    _isClearedPermanently = true;
+    _isMemInitialized = true;
+
     final db = await database;
     if (db != null) {
       try { await db.delete('items'); } catch (_) {}
@@ -1385,17 +1501,25 @@ class DBHelper {
       try { await db.delete('stock_movements'); } catch (_) {}
       try { await db.delete('returns'); } catch (_) {}
       try { await db.delete('return_items'); } catch (_) {}
+      try { await db.delete('sales'); } catch (_) {}
+      try { await db.delete('sale_items'); } catch (_) {}
+      try { await db.delete('customers'); } catch (_) {}
+      try { await db.delete('customer_payments'); } catch (_) {}
     }
 
-    _memItems.clear();
-    _memTransfers.clear();
-    _memTransferItems.clear();
-    _memSales.clear();
-    _memSaleItems.clear();
-    _memProductUnits.clear();
-    _memStockMovements.clear();
-    _memReturns.clear();
-    _memReturnItems.clear();
+    _clearAllMemLists();
+    CustomerModel.clearAllCustomers();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('benaa_db_cleared', true);
+      await prefs.remove('benaa_mem_items');
+      await prefs.remove('benaa_mem_transfers');
+      await prefs.remove('benaa_mem_transfer_items');
+      await prefs.remove('benaa_mem_sales');
+      await prefs.remove('benaa_mem_movements');
+      await prefs.remove('benaa_mem_customers');
+    } catch (_) {}
   }
 
   /// Get Database raw bytes for backup/export
@@ -1418,11 +1542,14 @@ class DBHelper {
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       _memItems.removeWhere((i) => i['code'] == code);
+      await _saveMemStateToPrefs();
       return;
     }
     try {
       await db.delete('items', where: 'code = ?', whereArgs: [code]);
       await db.delete('product_units', where: 'product_code = ?', whereArgs: [code]);
+      _memItems.removeWhere((i) => i['code'] == code);
+      await _saveMemStateToPrefs();
     } catch (e) {
       debugPrint("Error deleting item $code: $e");
     }
