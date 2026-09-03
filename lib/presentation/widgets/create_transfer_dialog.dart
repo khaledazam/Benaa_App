@@ -6,6 +6,8 @@ import '../../core/services/notification_service.dart';
 import '../providers/inventory_provider.dart';
 import '../../data/models/item_model.dart';
 import '../../core/services/ceiling_estimation_engine.dart';
+import '../../core/services/decoration_estimation_engine.dart';
+import 'decoration_estimator_dialog.dart';
 import 'camera_scanner_dialog.dart';
 import 'nfc_scanner_dialog.dart';
 
@@ -212,9 +214,41 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
                     ),
                     const SizedBox(height: 6),
 
-                    // Product Add inputs with Camera / NFC scanner buttons
+                    // Product Add inputs with Camera / NFC scanner buttons & Decoration Estimator
                     Row(
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.architecture, color: AppColors.success),
+                          tooltip: '📐 مقايسة ديكور شاملة (أسقف، خشب، رخام، فوم)',
+                          onPressed: () async {
+                            await showDialog(
+                              context: context,
+                              builder: (c) => DecorationEstimatorDialog(
+                                onAddItemsToCart: (items) {
+                                  setState(() {
+                                    for (var item in items) {
+                                      _invoiceItems.add({
+                                        'item_code': item['item_code'],
+                                        'item_name': item['item_name'],
+                                        'expected_qty': item['qty'],
+                                        'unit': item['unit'],
+                                        'conversion_factor': 1.0,
+                                        'unit_price': item['unit_price'] ?? 25.0,
+                                        'notes': item['breakdown_notes'] ?? 'مقايسة ديكور آلية',
+                                      });
+                                    }
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: AppColors.success,
+                                      content: Text('تمت إضافة ${items.length} بنود من المقايسة للشحنة بنجاح! 📐📦'),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
                         IconButton(
                           icon: const Icon(Icons.qr_code_scanner, color: AppColors.primaryAccent),
                           tooltip: 'مسح الكاميرا',
