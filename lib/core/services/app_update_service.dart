@@ -31,8 +31,8 @@ class AppUpdateInfo {
 }
 
 class AppUpdateService {
-  static const String currentVersion = '1.0.0';
-  static const int currentBuildNumber = 1;
+  static const String currentVersion = '1.0.1';
+  static const int currentBuildNumber = 2;
 
   // Remote version check endpoint
   static const String updateCheckUrl = 'https://raw.githubusercontent.com/khaledazam/Benaa_App/main/version.json';

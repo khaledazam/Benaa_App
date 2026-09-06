@@ -1,7 +1,7 @@
 {
-  "latest_version": "1.0.0",
-  "build_number": 1,
-  "release_notes": "إطلاق النسخة الرسمية لتطبيق Benaa للمستودعات وإدارة المخزون والديكور مع دعم العمل Offline ومسح الباركود بالكاميرا وإصدار الفواتير وسندات القبض.",
-  "apk_download_url": "https://github.com/khaledazam/Benaa_App/releases/latest/download/app-release.apk",
+  "latest_version": "1.0.1",
+  "build_number": 2,
+  "release_notes": "تحديث شامل: إصلاح عرض بطاقات الأصناف بالكامل، تفعيل محرك حسابات الديكور وبدائل الرخام والخشب والأسقف، وفك تشفير فواتير هيئة الزكاة والضريبة ZATCA.",
+  "apk_download_url": "https://github.com/khaledazam/Benaa_App/raw/main/docs/app-release.apk",
   "is_mandatory": false
 }
