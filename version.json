@@ -1,7 +1,7 @@
 {
-  "latest_version": "1.0.2",
-  "build_number": 3,
-  "release_notes": "إصلاح تعليق شاشة جرد الفواتير وتأمين حفظ بنود المقايسات والأصناف بدقة، مع إمكانية التحديث المباشر والاحتفاظ بكامل البيانات.",
+  "latest_version": "1.0.3",
+  "build_number": 4,
+  "release_notes": "تحسين تفكيك الكراتين وعرضها بوضوح في شاشة إنشاء وجرد الفواتير، وتصنيف زوايا البلاط والحديد بدقة.",
   "apk_download_url": "https://github.com/khaledazam/Benaa_App/raw/main/docs/app-release.apk",
   "is_mandatory": false
 }

@@ -68,9 +68,17 @@ class CeilingEstimationEngine {
     final category = item.category.toLowerCase();
     final code = item.code.toLowerCase();
 
-    // 1. بلاط الجبس / أسقف جبسية
-    if (name.contains('بلاط') || name.contains('جبس') || category.contains('جبس') || category.contains('بلاط') || code == '154' || code == '1010') {
-      return CeilingItemCategory.gypsumTiles;
+    // 1. زوايا الجدار وزوايا البلاط وحديد الزاوية (Wall Angle / Tile Angle / Corner Trim)
+    // نضع فحص الزوايا أولاً قبل فحص "بلاط" حتى لا يُصنف صنف "زاوية بلاط" خطأً كبلاط أسقف جبسية
+    if (name.contains('زاوية') ||
+        name.contains('زاويه') ||
+        name.contains('angle') ||
+        name.contains('corner') ||
+        name.contains('كورنر') ||
+        code == '3001' ||
+        category.contains('زوايا') ||
+        category.contains('زوايه')) {
+      return CeilingItemCategory.wallAngle;
     }
 
     // 2. الجسور المعلقة (Main Tee)
@@ -78,22 +86,39 @@ class CeilingEstimationEngine {
       return CeilingItemCategory.mainTee;
     }
 
-    // 3. زوايا الجدار (Wall Angle)
-    if (name.contains('زاوية') || name.contains('angle') || name.contains('corner') || code == '3001') {
-      return CeilingItemCategory.wallAngle;
-    }
-
-    // 4. عرضية 60 سم (Cross Tee 60)
-    if ((name.contains('عرضية') || name.contains('cross')) && (name.contains('60') || code == '6001')) {
+    // 3. عرضية 60 سم (Cross Tee 60)
+    if ((name.contains('عرضية') || name.contains('عرضيه') || name.contains('cross')) && (name.contains('60') || code == '6001')) {
       return CeilingItemCategory.crossTee60;
     }
 
-    // 5. عرضية 120 سم (Cross Tee 120)
-    if ((name.contains('عرضية') || name.contains('cross')) && (name.contains('120') || code == '1202')) {
+    // 4. عرضية 120 سم (Cross Tee 120)
+    if ((name.contains('عرضية') || name.contains('عرضيه') || name.contains('cross')) && (name.contains('120') || code == '1202')) {
       return CeilingItemCategory.crossTee120;
     }
 
+    // 5. بلاط الجبس / أسقف جبسية
+    if (name.contains('بلاط') || name.contains('جبس') || category.contains('جبس') || category.contains('بلاط') || code == '154' || code == '1010') {
+      return CeilingItemCategory.gypsumTiles;
+    }
+
     return CeilingItemCategory.standard;
+  }
+
+  /// سعة الكرتونة لكل فئة هندسية
+  static int getCartonCapacity(CeilingItemCategory category) {
+    switch (category) {
+      case CeilingItemCategory.gypsumTiles:
+        return 8;
+      case CeilingItemCategory.mainTee:
+        return 25;
+      case CeilingItemCategory.wallAngle:
+        return 50;
+      case CeilingItemCategory.crossTee60:
+      case CeilingItemCategory.crossTee120:
+        return 75;
+      case CeilingItemCategory.standard:
+        return 1;
+    }
   }
 
   /// حساب التفكيك الدقيق لأي صنف عند إدخال المساحة بالمتر المربع (م²)

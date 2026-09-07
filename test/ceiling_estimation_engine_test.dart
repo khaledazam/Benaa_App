@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:benaa_flutter_mobile/data/models/item_model.dart';
 import 'package:benaa_flutter_mobile/core/services/ceiling_estimation_engine.dart';
 
 void main() {
@@ -55,6 +56,35 @@ void main() {
       expect(estimate.crossTees60.totalPieces, 375.0);
       expect(estimate.crossTees60.fullCartons, 5);
       expect(estimate.crossTees60.loosePieces, 0);
+    });
+
+    test('Angle vs Tile precedence: "زاويه بلاط" detected as wallAngle (not gypsumTiles)', () {
+      final item = ItemModel(
+        code: '2',
+        name: 'زاويه بلاط',
+        category: 'حديد وزوايا',
+        legacyUnit: 'حبة',
+        currentStock: 0,
+      );
+
+      final cat = CeilingEstimationEngine.detectCategory(item);
+      expect(cat, CeilingItemCategory.wallAngle);
+
+      final breakdown = CeilingEstimationEngine.calculateItemBreakdown(item: item, areaM2: 55000.0);
+      // 55000 * 0.22 = 12100 pieces -> 12100 / 50 = 242 full cartons, 0 loose
+      expect(breakdown.totalPieces, 12100.0);
+      expect(breakdown.fullCartons, 242);
+      expect(breakdown.loosePieces, 0);
+      expect(breakdown.cartonCapacity, 50);
+      expect(breakdown.shortSummary, '242 كرتونة');
+    });
+
+    test('Angle detection: "حديد زاويه" and "زاوية جدار" classified correctly', () {
+      final item1 = ItemModel(code: 'A1', name: 'حديد زاويه 3 متر', category: 'حديد', legacyUnit: 'حبة', currentStock: 0);
+      final item2 = ItemModel(code: 'A2', name: 'زاوية جدار كروم', category: 'إكسسوارات', legacyUnit: 'حبة', currentStock: 0);
+
+      expect(CeilingEstimationEngine.detectCategory(item1), CeilingItemCategory.wallAngle);
+      expect(CeilingEstimationEngine.detectCategory(item2), CeilingItemCategory.wallAngle);
     });
   });
 }

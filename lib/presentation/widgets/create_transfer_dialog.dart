@@ -6,7 +6,6 @@ import '../../core/services/notification_service.dart';
 import '../providers/inventory_provider.dart';
 import '../../data/models/item_model.dart';
 import '../../core/services/ceiling_estimation_engine.dart';
-import '../../core/services/decoration_estimation_engine.dart';
 import 'decoration_estimator_dialog.dart';
 import 'camera_scanner_dialog.dart';
 import 'nfc_scanner_dialog.dart';
@@ -74,21 +73,72 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
 
     HapticsService.scanSuccess();
 
-    String unitNote = _selectedUnit != 'حبة' ? 'الوحدة: $_selectedUnit' : 'حبة فردية';
-    double actualPieces = qty;
-
-    if (_selectedUnit.contains('متر مربع') || _selectedUnit.contains('م²')) {
-      final mockItem = ItemModel(
+    final provider = Provider.of<InventoryProvider>(context, listen: false);
+    final existingItem = provider.localItems.firstWhere(
+      (i) =>
+          (code.isNotEmpty && i.code.trim().toLowerCase() == code.trim().toLowerCase()) ||
+          i.name.trim().toLowerCase() == name.trim().toLowerCase(),
+      orElse: () => ItemModel(
         code: code,
         name: name,
         category: 'أسقف وديكور',
         legacyUnit: 'حبة',
         currentStock: 0,
         unitPrice: 0,
-      );
-      final res = CeilingEstimationEngine.calculateItemBreakdown(item: mockItem, areaM2: qty);
+      ),
+    );
+
+    int cartonCap = 1;
+    if (existingItem.conversionFactor > 1) {
+      cartonCap = existingItem.conversionFactor.toInt();
+    } else {
+      final cat = CeilingEstimationEngine.detectCategory(existingItem);
+      cartonCap = CeilingEstimationEngine.getCartonCapacity(cat);
+    }
+
+    String unitNote = _selectedUnit != 'حبة' ? 'الوحدة: $_selectedUnit' : 'حبة فردية';
+    double actualPieces = qty;
+    String breakdownText = '';
+    String shortSummary = '';
+
+    if (_selectedUnit.contains('متر مربع') || _selectedUnit.contains('م²')) {
+      final res = CeilingEstimationEngine.calculateItemBreakdown(item: existingItem, areaM2: qty);
       actualPieces = res.totalPieces;
-      unitNote = 'المساحة: $qty م² (${res.shortSummary})';
+      breakdownText = res.formattedBreakdown;
+      shortSummary = res.shortSummary;
+      unitNote = 'المساحة: $qty م² ($breakdownText)';
+    } else if (_selectedUnit.contains('كرتون')) {
+      if (cartonCap > 1) {
+        actualPieces = qty * cartonCap;
+        breakdownText = '$qty كرتونة مقفولة (${actualPieces.toInt()} قطعة)';
+        shortSummary = '$qty كرتونة';
+        unitNote = '$qty كرتونة ($breakdownText)';
+      } else {
+        actualPieces = qty;
+        breakdownText = '$qty كرتونة';
+        shortSummary = '$qty كرتونة';
+        unitNote = '$qty كرتونة';
+      }
+    } else {
+      actualPieces = qty;
+      if (cartonCap > 1) {
+        final fullCartons = (qty / cartonCap).floor();
+        final loose = (qty % cartonCap).toInt();
+        if (fullCartons > 0 && loose > 0) {
+          breakdownText = '$fullCartons كرتونة + $loose حبة (${qty.toInt()} قطعة)';
+          shortSummary = '$fullCartons ك + $loose حبة';
+        } else if (fullCartons > 0) {
+          breakdownText = '$fullCartons كرتونة مقفولة (${qty.toInt()} قطعة)';
+          shortSummary = '$fullCartons كرتونة';
+        } else {
+          breakdownText = '$loose حبة فردي';
+          shortSummary = '$loose حبة';
+        }
+        unitNote = '$shortSummary (${qty.toInt()} حبة)';
+      } else {
+        breakdownText = '${qty.toInt()} حبة';
+        shortSummary = '${qty.toInt()} حبة';
+      }
     }
 
     setState(() {
@@ -97,6 +147,8 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
         'item_name': name,
         'qty': actualPieces,
         'unit': _selectedUnit,
+        'breakdown': breakdownText,
+        'short_summary': shortSummary,
         'notes': unitNote,
       });
       _itemCodeController.clear();
@@ -537,6 +589,10 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
                         itemCount: _invoiceItems.length,
                         itemBuilder: (ctx, idx) {
                           final item = _invoiceItems[idx];
+                          final numVal = (item['qty'] ?? item['expected_qty'] ?? 1.0) as num;
+                          final breakdown = (item['breakdown'] ?? item['notes'] ?? '').toString();
+                          final shortSummary = item['short_summary']?.toString() ?? '';
+
                           return Card(
                             margin: const EdgeInsets.only(bottom: 6),
                             color: AppColors.bgDark,
@@ -547,14 +603,39 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
                             child: ListTile(
                               dense: true,
                               title: Text(item['item_name'], style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold), textAlign: TextAlign.right),
-                              subtitle: Text('الكود: ${item['item_code']}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11), textAlign: TextAlign.right),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text('الكود: ${item['item_code']}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11), textAlign: TextAlign.right),
+                                  if (breakdown.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        '📦 $breakdown',
+                                        style: const TextStyle(color: AppColors.primaryAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                                        textAlign: TextAlign.right,
+                                      ),
+                                    ),
+                                ],
+                              ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Builder(builder: (c) {
-                                    final numVal = (item['qty'] ?? item['expected_qty'] ?? 1.0) as num;
-                                    return Text('${numVal.toInt()} حبة', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold));
-                                  }),
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        shortSummary.isNotEmpty ? shortSummary : '${numVal.toInt()} حبة',
+                                        style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                      if (shortSummary.isNotEmpty && !shortSummary.endsWith('حبة'))
+                                        Text(
+                                          '(${numVal.toInt()} حبة)',
+                                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                                        ),
+                                    ],
+                                  ),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
                                     onPressed: () {

@@ -893,7 +893,20 @@ class _TransferAuditDetailScreenState extends State<TransferAuditDetailScreen> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 10),
+                                  if (item.notes != null && item.notes!.trim().isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4, bottom: 4),
+                                      child: Text(
+                                        '📦 ${item.notes}',
+                                        style: const TextStyle(
+                                          color: AppColors.primaryAccent,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        textAlign: TextAlign.right,
+                                      ),
+                                    ),
+                                  const SizedBox(height: 8),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
