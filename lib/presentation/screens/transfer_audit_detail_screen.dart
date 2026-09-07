@@ -470,10 +470,78 @@ class _TransferAuditDetailScreenState extends State<TransferAuditDetailScreen> {
       builder: (context, provider, child) {
         final transfer = provider.selectedTransfer;
 
-        if (provider.isLoading || transfer == null) {
-          return const Scaffold(
-            backgroundColor: AppColors.bgDark,
-            body: Center(child: CircularProgressIndicator(color: AppColors.primaryAccent)),
+        if (provider.isLoading) {
+          return Scaffold(
+            backgroundColor: AppColors.getBg(context),
+            appBar: AppBar(
+              title: const Text('جاري جلب الفاتورة...'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(color: AppColors.primaryAccent),
+                  const SizedBox(height: 16),
+                  Text(
+                    'جاري تحميل بيانات الفاتورة والأصناف...',
+                    style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (transfer == null) {
+          return Scaffold(
+            backgroundColor: AppColors.getBg(context),
+            appBar: AppBar(
+              title: const Text('تنبيه'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.find_in_page_outlined, size: 64, color: AppColors.warning),
+                    const SizedBox(height: 16),
+                    Text(
+                      'لم يتم العثور على الفاتورة المطلوبة',
+                      style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'قد تكون الفاتورة غير مكتملة أو حدث خطأ أثناء قراءة البيانات.',
+                      style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('إعادة المحاولة'),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryAccent),
+                      onPressed: () {
+                        provider.selectTransfer(widget.transferId);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('العودة للقائمة', style: TextStyle(color: AppColors.textSecondary)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           );
         }
 

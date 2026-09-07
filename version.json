@@ -1,7 +1,7 @@
 {
-  "latest_version": "1.0.1",
-  "build_number": 2,
-  "release_notes": "تحديث شامل: إصلاح عرض بطاقات الأصناف بالكامل، تفعيل محرك حسابات الديكور وبدائل الرخام والخشب والأسقف، وفك تشفير فواتير هيئة الزكاة والضريبة ZATCA.",
+  "latest_version": "1.0.2",
+  "build_number": 3,
+  "release_notes": "إصلاح تعليق شاشة جرد الفواتير وتأمين حفظ بنود المقايسات والأصناف بدقة، مع إمكانية التحديث المباشر والاحتفاظ بكامل البيانات.",
   "apk_download_url": "https://github.com/khaledazam/Benaa_App/raw/main/docs/app-release.apk",
   "is_mandatory": false
 }

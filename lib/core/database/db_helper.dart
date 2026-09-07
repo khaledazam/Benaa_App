@@ -964,6 +964,7 @@ class DBHelper {
     final db = await database;
 
     if (db == null || _isInMemoryFallback) {
+      _isClearedPermanently = false;
       _memTransfers.add({
         'id': transferId,
         'transfer_number': transferNumber,
@@ -977,18 +978,23 @@ class DBHelper {
 
       int nextId = _memTransferItems.isEmpty ? 1 : ((_memTransferItems.map((i) => i['id'] is int ? i['id'] as int : 0).fold(0, (max, e) => e > max ? e : max)) + 1);
       for (var item in items) {
-        final qty = (item['qty'] ?? item['expected_qty'] as num?)?.toDouble() ?? 1.0;
+        final rawQty = item['qty'] ?? item['expected_qty'];
+        final double qty = rawQty is num
+            ? rawQty.toDouble()
+            : (double.tryParse(rawQty?.toString() ?? '1.0') ?? 1.0);
+
         _memTransferItems.add({
           'id': nextId++,
           'transfer_id': transferId,
-          'item_code': item['item_code'],
-          'item_name': item['item_name'],
+          'item_code': item['item_code']?.toString() ?? 'ITEM-${DateTime.now().millisecondsSinceEpoch % 100000}',
+          'item_name': item['item_name']?.toString() ?? 'صنف جديد',
           'author': author,
           'expected_qty': qty,
           'actual_qty': qty,
           'notes': item['notes'] ?? '',
         });
       }
+      await _saveMemStateToPrefs();
       return transferId;
     }
 
@@ -1009,15 +1015,20 @@ class DBHelper {
       );
 
       for (var item in items) {
+        final rawQty = item['qty'] ?? item['expected_qty'];
+        final double qty = rawQty is num
+            ? rawQty.toDouble()
+            : (double.tryParse(rawQty?.toString() ?? '1.0') ?? 1.0);
+
         await db.insert(
           'transfer_items',
           {
             'transfer_id': transferId,
-            'item_code': item['item_code'],
-            'item_name': item['item_name'],
+            'item_code': item['item_code']?.toString() ?? 'ITEM-${DateTime.now().millisecondsSinceEpoch % 100000}',
+            'item_name': item['item_name']?.toString() ?? 'صنف جديد',
             'author': author,
-            'expected_qty': (item['qty'] as num).toDouble(),
-            'actual_qty': (item['qty'] as num).toDouble(),
+            'expected_qty': qty,
+            'actual_qty': qty,
             'notes': item['notes'] ?? '',
           },
           conflictAlgorithm: ConflictAlgorithm.replace,

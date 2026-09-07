@@ -57,9 +57,15 @@ class InventoryProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    _selectedTransfer = await _dbHelper.getTransferById(id);
-    _isLoading = false;
-    notifyListeners();
+    try {
+      _selectedTransfer = await _dbHelper.getTransferById(id);
+    } catch (e) {
+      debugPrint("Error selecting transfer $id: $e");
+      _selectedTransfer = null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   void setSearchQuery(String query) {

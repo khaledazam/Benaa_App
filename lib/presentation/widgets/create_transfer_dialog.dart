@@ -227,13 +227,15 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
                                 onAddItemsToCart: (items) {
                                   setState(() {
                                     for (var item in items) {
+                                      final q = (item['qty'] as num?)?.toDouble() ?? 1.0;
                                       _invoiceItems.add({
                                         'item_code': item['item_code'],
                                         'item_name': item['item_name'],
-                                        'expected_qty': item['qty'],
-                                        'unit': item['unit'],
+                                        'qty': q,
+                                        'expected_qty': q,
+                                        'unit': item['unit'] ?? 'حبة',
                                         'conversion_factor': 1.0,
-                                        'unit_price': item['unit_price'] ?? 25.0,
+                                        'unit_price': (item['unit_price'] as num?)?.toDouble() ?? 25.0,
                                         'notes': item['breakdown_notes'] ?? 'مقايسة ديكور آلية',
                                       });
                                     }
@@ -549,7 +551,10 @@ class _CreateTransferDialogState extends State<CreateTransferDialog> {
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text('${item['qty'].toInt()} حبة', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
+                                  Builder(builder: (c) {
+                                    final numVal = (item['qty'] ?? item['expected_qty'] ?? 1.0) as num;
+                                    return Text('${numVal.toInt()} حبة', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold));
+                                  }),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
                                     onPressed: () {
