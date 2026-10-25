@@ -22,6 +22,7 @@ dependencies:
   # State Management & Helpers
   provider: ^6.1.1
   intl: ^0.20.3
+  http: ^1.2.0
 
   # UI & Styling
   google_fonts: ^6.1.0

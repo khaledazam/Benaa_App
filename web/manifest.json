@@ -1,11 +1,11 @@
 {
-    "name": "benaa_flutter_mobile",
-    "short_name": "benaa_flutter_mobile",
+    "name": "نظام بناء لإدارة المستودعات",
+    "short_name": "بناء المستودعات",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0F172A",
+    "theme_color": "#1E293B",
+    "description": "منظومة إدارة المخزون الموحد ومراقبة الاشتراكات - بناء للديكور والمقاولات",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

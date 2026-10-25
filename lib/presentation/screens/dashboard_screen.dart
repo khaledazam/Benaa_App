@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_responsive.dart';
+import '../../core/theme/app_typography.dart';
 import '../providers/inventory_provider.dart';
 import 'transfers_list_screen.dart';
 import 'transfer_audit_detail_screen.dart';
@@ -9,25 +9,24 @@ import 'stock_audit_screen.dart';
 import 'local_stock_screen.dart';
 import 'sales_issuance_screen.dart';
 import 'sync_manager_screen.dart';
-import 'returns_management_screen.dart';
+import '../widgets/enterprise/kpi_card.dart';
+import '../widgets/enterprise/stock_badge.dart';
+import '../widgets/enterprise/section_header.dart';
+import '../widgets/enterprise/enterprise_empty_state.dart';
 import '../widgets/create_transfer_dialog.dart';
-import '../../core/services/pdf_report_service.dart';
-import '../../core/services/share_service.dart';
-import '../../core/services/notification_service.dart';
-import '../../core/services/haptics_service.dart';
-import '../widgets/inventory_chart_widget.dart';
 import '../widgets/barcode_print_picker_dialog.dart';
 import '../widgets/packaging_unit_converter_dialog.dart';
 import '../widgets/warehouse_location_dialog.dart';
 import '../widgets/customer_statement_dialog.dart';
-import '../widgets/customer_payment_dialog.dart';
-import '../widgets/absher_hawsu_dialog.dart';
-import '../widgets/hawsu_loading_overlay.dart';
 import '../widgets/invoice_ocr_scanner_dialog.dart';
-import '../../core/services/biometric_auth_service.dart';
+import '../../core/services/pdf_report_service.dart';
+import '../../core/services/share_service.dart';
 import '../../core/services/app_update_service.dart';
-import '../providers/theme_provider.dart';
+import '../../core/services/benaa_ai_service.dart';
+import '../widgets/ai/dashboard_ai_widget.dart';
+import 'ai_notification_center_screen.dart';
 
+/// Clean Operational Enterprise Dashboard for Benaa Warehouse ERP
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
 
@@ -44,7 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       provider.loadTransfers();
       provider.loadLocalItems();
 
-      // Silent opportunistic background update check (Zero interruption)
+      // Silent opportunistic background update check
       final updateInfo = await AppUpdateService.checkForUpdate();
       if (updateInfo != null && mounted) {
         AppUpdateService.showUpdateDialog(context, updateInfo);
@@ -52,199 +51,436 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color, {VoidCallback? onTap}) {
-    return Builder(
-      builder: (context) {
-        final iconSize = AppResponsive.iconSize(context, 30);
-        final titleFontSize = AppResponsive.fontSize(context, 13);
-        final valueFontSize = AppResponsive.fontSize(context, 19);
+  Widget _buildWarehouseContextCard(BuildContext context, bool isDark) {
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? AppColors.borderDark : const Color(0xFFE2E8F0);
 
-        return Card(
-          elevation: 2,
-          color: AppColors.getCardBg(context),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: AppColors.getBorder(context)),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 1.1),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? AppColors.borderDark : const Color(0xFFBFDBFE),
+                width: 1,
+              ),
+            ),
+            child: const Center(
+              child: Icon(Icons.warehouse_rounded, color: AppColors.primary, size: 24),
+            ),
           ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'مستودع مواد البناء والديكور الرئيسي',
+                        style: AppTypography.cardTitle(
+                          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        ).copyWith(fontWeight: FontWeight.w700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'WH-01',
+                        style: AppTypography.smallLabel(
+                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'فرع القصيم • الوردية الأولى • المشرف: أمين المستودع',
+                  style: AppTypography.secondary(
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SyncManagerScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.success.withOpacity(0.25), width: 1),
+              ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.16),
-                      borderRadius: BorderRadius.circular(14),
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
                     ),
-                    child: Icon(icon, color: color, size: iconSize),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            color: AppColors.getTextSecondary(context),
-                            fontSize: titleFontSize,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            value,
-                            style: TextStyle(
-                              color: AppColors.getTextPrimary(context),
-                              fontSize: valueFontSize,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
+                  const SizedBox(width: 5),
+                  Text(
+                    'متصل سحابياً',
+                    style: AppTypography.smallLabel(color: AppColors.success).copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
                     ),
                   ),
                 ],
               ),
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  Widget _buildActionCard({
+  Widget _buildPrimaryActionCard(
+    BuildContext context, {
     required String title,
     required String subtitle,
+    required String badgeText,
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Builder(
-      builder: (context) {
-        final iconSize = AppResponsive.iconSize(context, 26);
-        final titleFontSize = AppResponsive.fontSize(context, 15);
-        final subtitleFontSize = AppResponsive.fontSize(context, 12);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? AppColors.borderDark : const Color(0xFFE2E8F0);
 
-        return Card(
-          color: AppColors.getCardBg(context),
-          elevation: 2,
-          margin: const EdgeInsets.only(bottom: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: AppColors.getBorder(context)),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor, width: 1.1),
+            boxShadow: isDark
+                ? []
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: color, size: iconSize),
-            ),
-            title: Text(
-              title,
-              style: TextStyle(
-                color: AppColors.getTextPrimary(context),
-                fontWeight: FontWeight.bold,
-                fontSize: titleFontSize,
-              ),
-              textAlign: TextAlign.right,
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                subtitle,
-                style: TextStyle(
-                  color: AppColors.getTextSecondary(context),
-                  fontSize: subtitleFontSize,
-                  height: 1.3,
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: color.withOpacity(0.25), width: 1),
                 ),
-                textAlign: TextAlign.right,
+                child: Center(
+                  child: Icon(icon, color: color, size: 24),
+                ),
               ),
-            ),
-            trailing: Icon(
-              Icons.arrow_forward_ios,
-              color: AppColors.getTextSecondary(context),
-              size: AppResponsive.iconSize(context, 18),
-            ),
-            onTap: () {
-              HapticsService.lightImpact();
-              onTap();
-            },
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: AppTypography.cardTitle(
+                              color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                            ).copyWith(fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            badgeText,
+                            style: AppTypography.smallLabel(color: color).copyWith(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: AppTypography.secondary(
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSecondaryActionCard(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? AppColors.borderDark : const Color(0xFFE2E8F0);
+
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: AppTypography.cardTitle(
+                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                    ).copyWith(fontSize: 13.5, fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? AppColors.borderDark : const Color(0xFFE2E8F0);
+
     return Scaffold(
-      backgroundColor: AppColors.getBg(context),
       appBar: AppBar(
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerRight,
-          child: Text(
-            'نظام الجرد والمخازن',
-            style: TextStyle(fontSize: AppResponsive.fontSize(context, 16), fontWeight: FontWeight.bold),
-          ),
+        title: Text(
+          'بناء — إدارة المستودع',
+          style: AppTypography.screenTitle(
+            color: isDark ? const Color(0xFFF8FAFC) : AppColors.textPrimary,
+          ).copyWith(fontSize: 19),
         ),
         actions: [
-          Consumer<ThemeProvider>(
-            builder: (ctx, themeProv, _) => IconButton(
-              icon: Icon(
-                themeProv.isDarkMode ? Icons.wb_sunny_outlined : Icons.nightlight_round,
-                color: AppColors.primaryAccent,
-                size: AppResponsive.iconSize(context, 22),
-              ),
-              tooltip: 'المظهر',
-              onPressed: () => themeProv.toggleTheme(),
-            ),
+          ListenableBuilder(
+            listenable: BenaaAiService(),
+            builder: (context, _) {
+              final unread = BenaaAiService().unreadCount;
+              final high = BenaaAiService().highSeverityCount;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      unread > 0 ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+                      size: 23,
+                      color: unread > 0 ? (high > 0 ? AppColors.error : AppColors.primary) : null,
+                    ),
+                    tooltip: 'مركز تنبيهات ذكاء بناء',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AiNotificationCenterScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (unread > 0)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: high > 0 ? AppColors.error : AppColors.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                            width: 1.5,
+                          ),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '$unread',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            height: 1,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: AppColors.success,
-                    shape: BoxShape.circle,
-                  ),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 21),
+            tooltip: 'تصدير تقرير المستودع',
+            onPressed: () async {
+              final prov = Provider.of<InventoryProvider>(context, listen: false);
+              final totalVal = prov.localItems.fold<double>(0.0, (s, i) => s + (i.currentStock * i.unitPrice));
+              final lowCount = prov.localItems.where((i) => i.currentStock <= 15).length;
+              await PdfReportService.printOrPreviewReport(
+                items: prov.localItems,
+                totalValuation: totalVal,
+                lowStockCount: lowCount,
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined, size: 21),
+            tooltip: 'مشاركة التقرير',
+            onPressed: () async {
+              final prov = Provider.of<InventoryProvider>(context, listen: false);
+              final totalVal = prov.localItems.fold<double>(0.0, (s, i) => s + (i.currentStock * i.unitPrice));
+              final lowCount = prov.localItems.where((i) => i.currentStock <= 15).length;
+              await ShareService.shareStockReportPdf(
+                items: prov.localItems,
+                totalValuation: totalVal,
+                lowStockCount: lowCount,
+              );
+            },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, size: 21),
+            tooltip: 'خيارات المستودع',
+            onSelected: (val) async {
+              final prov = Provider.of<InventoryProvider>(context, listen: false);
+              if (val == 'seed_30') {
+                await prov.seedRealisticTestData();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: AppColors.success,
+                      content: Text('تم تهيئة دليل المنتجات (32 صنفاً بمخزون أولي صفري)'),
+                    ),
+                  );
+                }
+              } else if (val == 'clear_all') {
+                await prov.clearAllDataAndReset();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: AppColors.warning,
+                      content: Text('تم تفريغ كافة بيانات المستودع بنجاح'),
+                    ),
+                  );
+                }
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'seed_30',
+                child: Row(
+                  children: [
+                    Icon(Icons.inventory_2_rounded, size: 18, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Text('تهيئة دليل الأصناف (32 صنفاً - كمية صفرية)'),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  'Offline',
-                  style: TextStyle(
-                    color: AppColors.success,
-                    fontSize: AppResponsive.fontSize(context, 10),
-                    fontWeight: FontWeight.bold,
-                  ),
+              ),
+              const PopupMenuItem(
+                value: 'clear_all',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_sweep_rounded, size: 18, color: AppColors.error),
+                    SizedBox(width: 8),
+                    Text('تفريغ المستودع بالكامل'),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -255,599 +491,466 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final lowStockItems = provider.localItems.where((i) => i.currentStock <= 15.0).toList();
           final lowStockCount = lowStockItems.length;
           final totalValuation = provider.localItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * i.unitPrice));
+          final availabilityRatio = localItemsCount == 0 ? 0.0 : ((localItemsCount - lowStockCount) / localItemsCount);
 
-          return SingleChildScrollView(
-            padding: EdgeInsets.all(AppResponsive.space(context, 14)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          return RefreshIndicator(
+            onRefresh: () async {
+              await provider.loadTransfers();
+              await provider.loadLocalItems();
+            },
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [
-                // Supervisor Banner with Export & Quick Action Buttons (Responsive Wrap)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.bgSurface],
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.borderDark),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                // 1. Warehouse Context Strip
+                _buildWarehouseContextCard(context, isDark),
+                const SizedBox(height: 14),
+
+                // 2. Benaa Intelligence AI Section
+                const DashboardAiWidget(),
+                const SizedBox(height: 14),
+
+                // 3. High-Impact KPI Grid (2x2)
+                Row(
+                  children: [
+                    Expanded(
+                      child: KpiCard(
+                        title: 'إجمالي الأصناف',
+                        value: '$localItemsCount صنف',
+                        badgeText: localItemsCount > 0 ? 'محدّث تلقائياً' : null,
+                        icon: Icons.inventory_2_outlined,
+                        accentColor: AppColors.primary,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LocalStockScreen()),
+                          );
+                        },
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: KpiCard(
+                        title: 'شحنات قادمة',
+                        value: '$pendingCount سند',
+                        badgeText: pendingCount > 0 ? 'تحتاج تدقيق' : 'مكتملة',
+                        icon: Icons.local_shipping_outlined,
+                        accentColor: AppColors.warning,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TransfersListScreen()),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: KpiCard(
+                        title: 'قيمة المخزون',
+                        value: '${totalValuation.toStringAsFixed(0)} ر.س',
+                        badgeText: 'رصيد مالي',
+                        icon: Icons.account_balance_wallet_outlined,
+                        accentColor: AppColors.success,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: KpiCard(
+                        title: 'وشيك النفاذ',
+                        value: '$lowStockCount صنف',
+                        badgeText: lowStockCount > 0 ? 'تحت حد الأمان' : 'آمن',
+                        icon: Icons.warning_amber_rounded,
+                        accentColor: AppColors.error,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LocalStockScreen(showLowStockOnly: true),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+                // 3. Operational Stock Health Strip
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: borderColor, width: 1),
                   ),
                   child: Column(
                     children: [
-                      Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      runSpacing: 10,
-                      spacing: 8,
-                      children: [
-                        ElevatedButton.icon(
-                          icon: Icon(Icons.picture_as_pdf, size: AppResponsive.iconSize(context, 16)),
-                          label: Text(
-                            'PDF / Excel',
-                            style: TextStyle(fontSize: AppResponsive.fontSize(context, 11), fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryAccent,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            minimumSize: const Size(80, 36),
-                          ),
-                          onPressed: () async {
-                            await PdfReportService.printOrPreviewReport(
-                              items: provider.localItems,
-                              totalValuation: totalValuation,
-                              lowStockCount: lowStockCount,
-                            );
-                          },
-                        ),
-                        ElevatedButton.icon(
-                          icon: Icon(Icons.document_scanner, size: AppResponsive.iconSize(context, 16)),
-                          label: Text(
-                            '📸 مسح فاتورة ورقية (AI OCR)',
-                            style: TextStyle(fontSize: AppResponsive.fontSize(context, 11), fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6A1B9A),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            minimumSize: const Size(90, 36),
-                          ),
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (ctx) => const InvoiceOcrScannerDialog(),
-                            );
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.fingerprint, color: AppColors.primaryAccent, size: AppResponsive.iconSize(context, 24)),
-                          tooltip: '🔐 التحقق بالبصمة',
-                          onPressed: () async {
-                            final success = await BiometricAuthService.authenticate(
-                              reason: 'تأكيد بصمة الإصبع أو الوجه لتأمين الوصول للسيستم',
-                            );
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: success ? AppColors.success : AppColors.danger,
-                                  content: Text(
-                                    success
-                                        ? '🟢 تم التحقق من بصمة الإصبع/الوجه بنجاح!'
-                                        : '🔴 فشل التحقق من البصمة أو تم إلغاؤه',
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.delete_forever, color: Colors.redAccent, size: AppResponsive.iconSize(context, 22)),
-                          tooltip: '🚨 تصفير قاعدة البيانات',
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                backgroundColor: AppColors.getCardBg(context),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                title: const Text(
-                                  '⚠️ تأكيد تصفير البيانات للبدء الفعلي',
-                                  style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold),
-                                  textAlign: TextAlign.right,
-                                ),
-                                content: const Text(
-                                  'هل أنت متأكد من مسح جميع المنتجات التجريبية، الفواتير، المرتجعات، وحركات المخزن للبدء بنسخة نظيفة وخالية تماماً؟',
-                                  style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
-                                  textAlign: TextAlign.right,
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx),
-                                    child: const Text('إلغاء', style: TextStyle(color: AppColors.textSecondary)),
-                                  ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-                                    onPressed: () async {
-                                      Navigator.pop(ctx);
-                                      await Provider.of<InventoryProvider>(context, listen: false).clearAllDataAndReset();
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            backgroundColor: AppColors.success,
-                                            content: Text('تم مسح جميع البيانات والفواتير بنجاح! التطبيق الآن نظيف وجاهز للبدء الفعلي 🚀'),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: const Text('نعم، مسح وتصفير الكل'),
-                                  ),
-                                ],
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.speed_rounded, size: 18, color: AppColors.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                'معدل توفر الأصناف بالمستودع',
+                                style: AppTypography.cardTitle(
+                                  color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                                ).copyWith(fontSize: 13.5),
                               ),
-                            );
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.share, color: Colors.white, size: AppResponsive.iconSize(context, 20)),
-                          tooltip: 'مشاركة التقرير',
-                          onPressed: () async {
-                            await ShareService.shareStockReportPdf(
-                              items: provider.localItems,
-                              totalValuation: totalValuation,
-                              lowStockCount: lowStockCount,
-                            );
-                          },
-                        ),
-                        InkWell(
-                            onTap: () => AbsherHawsuDialog.show(context),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF005C36), Color(0xFF00A86B)],
-                                  begin: Alignment.topRight,
-                                  end: Alignment.bottomLeft,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF00A86B).withOpacity(0.4),
-                                    blurRadius: 8,
-                                    spreadRadius: 1,
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.auto_awesome, color: const Color(0xFFFFD700), size: AppResponsive.iconSize(context, 18)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'أبشر حوس ⚡',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: AppResponsive.fontSize(context, 14),
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'مستودع الفرع: القصيم / بريدة',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.9),
-                                      fontSize: AppResponsive.fontSize(context, 11),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            ],
+                          ),
+                          Text(
+                            '${(availabilityRatio * 100).toStringAsFixed(0)}%',
+                            style: AppTypography.tabularNumber(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: availabilityRatio >= 0.8
+                                  ? AppColors.success
+                                  : (availabilityRatio >= 0.5 ? AppColors.warning : AppColors.error),
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Statistics Grid (Responsive Column Layout)
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isWide = constraints.maxWidth >= 600;
-                    return Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildStatCard(
-                                'أصناف بريدة',
-                                '$localItemsCount صنف',
-                                Icons.inventory_2_outlined,
-                                AppColors.info,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  HawsuPageRoute(page: const LocalStockScreen()),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _buildStatCard(
-                                'تحويلات قادمة',
-                                '$pendingCount فاتورة',
-                                Icons.local_shipping_outlined,
-                                AppColors.warning,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  HawsuPageRoute(page: const TransfersListScreen()),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildStatCard(
-                                'قيمة المخزون',
-                                '${totalValuation.toStringAsFixed(0)} ر.س',
-                                Icons.monetization_on_outlined,
-                                AppColors.success,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _buildStatCard(
-                                'وشيك النفاذ ⚠️',
-                                '$lowStockCount صنف',
-                                Icons.warning_amber_outlined,
-                                AppColors.danger,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  HawsuPageRoute(page: const LocalStockScreen(showLowStockOnly: true)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // 📊 Interactive Inventory & Analytics Chart
-                InventoryChartWidget(items: provider.localItems),
-
-                const SizedBox(height: 20),
-
-                Text(
-                  'المهام والإجراءات الرئيسية',
-                  style: TextStyle(
-                    color: AppColors.getTextPrimary(context),
-                    fontSize: AppResponsive.fontSize(context, 17),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Action Cards List with Enriched Icons & Touch Targets
-                _buildActionCard(
-                  title: '🏷️ طباعة ملصقات الباركود (Thermal Label)',
-                  subtitle: 'طباعة ستيكرات باركود الأصناف لطابعات الملصقات الحرارية',
-                  icon: Icons.qr_code_2,
-                  color: AppColors.info,
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => BarcodePrintPickerDialog(items: provider.localItems),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: '📦 حاسبة ومحول التعبئة والوحدات الكبرى',
-                  subtitle: 'تحويل الكراتين والطبليات إلى حبات وأمتار قياسية على الفور',
-                  icon: Icons.calculate_outlined,
-                  color: AppColors.warning,
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => PackagingUnitConverterDialog(items: provider.localItems),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: '📍 خريطة مواضع الأرفف والممرات بالمستودع',
-                  subtitle: 'تحديد ممر ورف وكابينة التخزين لكل صنف لسهولة السحب',
-                  icon: Icons.place_outlined,
-                  color: AppColors.info,
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => WarehouseLocationDialog(items: provider.localItems),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: '📜 كشوفات حساب العملاء التفصيلية',
-                  subtitle: 'استخراج كشف حساب مالي تفصيلي بالمدين والدائن ومشاركته PDF / واتساب',
-                  icon: Icons.receipt_long_outlined,
-                  color: AppColors.primaryAccent,
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => const CustomerStatementDialog(),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: '💵 تسجيل سند قبض / سداد حساب عميل',
-                  subtitle: 'تسجيل الدفعات المقبوضة نقداً أو تحويل بنكي وإصدار سند قبض PDF وتخفيض رصيده',
-                  icon: Icons.payments_outlined,
-                  color: AppColors.success,
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => const CustomerPaymentDialog(),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: 'جرد واستلام الفواتير الواردة',
-                  subtitle: 'مطابقة الفواتير الواردة من جدة والرياض أو أي شحنة وإدخالها للمخزون',
-                  icon: Icons.assignment_turned_in_outlined,
-                  color: AppColors.primaryAccent,
-                  onTap: () async {
-                    if (provider.transfers.isEmpty) {
-                      await provider.loadTransfers();
-                    }
-                    if (context.mounted) {
-                      Navigator.push(
-                        context,
-                        HawsuPageRoute(page: const TransfersListScreen()),
-                      );
-                    }
-                  },
-                ),
-
-                _buildActionCard(
-                  title: '➕ إنشاء فاتورة / شحنة جديدة',
-                  subtitle: 'إدخال فاتورة تحويل جديدة يدويًا وإضافة الأصناف بالمسح أو الكتابة',
-                  icon: Icons.note_add_outlined,
-                  color: AppColors.success,
-                  onTap: () async {
-                    final transferId = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => const CreateTransferDialog(),
-                    );
-                    if (transferId != null && transferId.isNotEmpty && context.mounted) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (ctx) => TransferAuditDetailScreen(transferId: transferId),
-                        ),
-                      );
-                    }
-                  },
-                ),
-
-                _buildActionCard(
-                  title: 'الجرد الدوري (عند الطلب)',
-                  subtitle: 'إجراء جرد كلي أو جزئي لأصناف المستودع وتسجيل الفروقات',
-                  icon: Icons.fact_check_outlined,
-                  color: AppColors.warning,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      HawsuPageRoute(page: const StockAuditScreen()),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: 'إذن صرف / بيع للمحلات',
-                  subtitle: 'توزيع الأصناف من مستودع بريدة للمحلات والعملاء وتحديث المخزون',
-                  icon: Icons.point_of_sale_outlined,
-                  color: AppColors.success,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      HawsuPageRoute(page: const SalesIssuanceScreen()),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: 'رصيد مستودع بريدة',
-                  subtitle: 'عرض كافة الأصناف المتاحة والكميات الحالية بالمرتجعات والتسويات',
-                  icon: Icons.warehouse_outlined,
-                  color: AppColors.info,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      HawsuPageRoute(page: const LocalStockScreen()),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: 'إدارة المزامنة مع الـ CRM',
-                  subtitle: 'متابعة حالة التخزين المحلي ورفع فواتير الجرد للسيرفر الرئيسي',
-                  icon: Icons.cloud_sync_outlined,
-                  color: AppColors.primaryAccent,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      HawsuPageRoute(page: const SyncManagerScreen()),
-                    );
-                  },
-                ),
-
-                _buildActionCard(
-                  title: '↩️ نظام المرتجعات الشامل (مبيعات وتوريد)',
-                  subtitle: 'معالجة مرجعات المبيعات والتوريد وتحديث الرصيد وكشوفات الحسابات تلقائياً',
-                  icon: Icons.assignment_return_outlined,
-                  color: AppColors.danger,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      HawsuPageRoute(page: const ReturnsManagementScreen()),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 24),
-
-                // Recent Transfer Invoice Highlight
-                if (provider.transfers.isNotEmpty) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            HawsuPageRoute(page: const TransfersListScreen()),
-                          );
-                        },
-                        child: Text(
-                          'عرض الكل',
-                          style: TextStyle(
-                            color: AppColors.primaryAccent,
-                            fontSize: AppResponsive.fontSize(context, 14),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: availabilityRatio,
+                          minHeight: 6,
+                          backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            availabilityRatio >= 0.8
+                                ? AppColors.success
+                                : (availabilityRatio >= 0.5 ? AppColors.warning : AppColors.error),
                           ),
                         ),
                       ),
-                      Text(
-                        'آخر فاتورة تحويل واردة',
-                        style: TextStyle(
-                          color: AppColors.getTextPrimary(context),
-                          fontSize: AppResponsive.fontSize(context, 16),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Card(
-                    color: AppColors.getCardBg(context),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: AppColors.primaryAccent),
+                ),
+
+                const SizedBox(height: 18),
+
+                // 4. Prioritized Primary Operational Actions
+                const SectionHeader(title: 'العمليات التشغيلية الأساسية'),
+                _buildPrimaryActionCard(
+                  context,
+                  title: 'استلام وتدقيق شحنة واردة',
+                  subtitle: 'فحص الشحنات الواردة ومطابقة الكميات والباركود',
+                  badgeText: 'أولوية تشغيلية',
+                  icon: Icons.assignment_turned_in_rounded,
+                  color: AppColors.primary,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const TransfersListScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                _buildPrimaryActionCard(
+                  context,
+                  title: 'إذن صرف ومبيعات',
+                  subtitle: 'إصدار أذون صرف وتسليم بضاعة للعملاء والمشاريع',
+                  badgeText: 'تسليم فوري',
+                  icon: Icons.point_of_sale_rounded,
+                  color: AppColors.success,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SalesIssuanceScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+
+                // Secondary Action Buttons (Side by Side)
+                Row(
+                  children: [
+                    _buildSecondaryActionCard(
+                      context,
+                      label: 'تحويل مخزون',
+                      icon: Icons.swap_horiz_rounded,
+                      color: AppColors.primary,
+                      onTap: () async {
+                        final transferId = await showDialog<String>(
+                          context: context,
+                          builder: (ctx) => const CreateTransferDialog(),
+                        );
+                        if (transferId != null && transferId.isNotEmpty && mounted) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TransferAuditDetailScreen(transferId: transferId),
+                            ),
+                          );
+                        }
+                      },
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: AppColors.primaryAccent,
-                        child: Icon(Icons.description, color: Colors.white, size: AppResponsive.iconSize(context, 22)),
-                      ),
-                      title: Text(
-                        'تحويل اصناف رقم ${provider.transfers.first.transferNumber}',
-                        style: TextStyle(
-                          color: AppColors.getTextPrimary(context),
-                          fontWeight: FontWeight.bold,
-                          fontSize: AppResponsive.fontSize(context, 15),
-                        ),
-                        textAlign: TextAlign.right,
-                      ),
-                      subtitle: Text(
-                        'من: ${provider.transfers.first.fromWarehouse} 👈 إلى: ${provider.transfers.first.toWarehouse}\nالكاتب: ${provider.transfers.first.author}',
-                        style: TextStyle(
-                          color: AppColors.getTextSecondary(context),
-                          fontSize: AppResponsive.fontSize(context, 12),
-                          height: 1.3,
-                        ),
-                        textAlign: TextAlign.right,
-                      ),
+                    const SizedBox(width: 10),
+                    _buildSecondaryActionCard(
+                      context,
+                      label: 'جرد فعلي ومطابقة',
+                      icon: Icons.fact_check_outlined,
+                      color: AppColors.warning,
                       onTap: () {
                         Navigator.push(
                           context,
-                          HawsuPageRoute(
-                            page: TransferAuditDetailScreen(
-                              transferId: provider.transfers.first.id,
-                            ),
-                          ),
+                          MaterialPageRoute(builder: (_) => const StockAuditScreen()),
                         );
                       },
                     ),
+                  ],
+                ),
+
+                const SizedBox(height: 18),
+
+                // 5. Operational Tools Bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: borderColor, width: 1),
                   ),
-                ],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildInlineTool(
+                        context,
+                        label: 'طباعة الباركود',
+                        icon: Icons.qr_code_2_rounded,
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => BarcodePrintPickerDialog(items: provider.localItems),
+                          );
+                        },
+                      ),
+                      Container(width: 1, height: 26, color: borderColor),
+                      _buildInlineTool(
+                        context,
+                        label: 'محول الوحدات',
+                        icon: Icons.swap_horiz_rounded,
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => PackagingUnitConverterDialog(items: provider.localItems),
+                          );
+                        },
+                      ),
+                      Container(width: 1, height: 26, color: borderColor),
+                      _buildInlineTool(
+                        context,
+                        label: 'مواضع الأرفف',
+                        icon: Icons.grid_view_rounded,
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => WarehouseLocationDialog(items: provider.localItems),
+                          );
+                        },
+                      ),
+                      Container(width: 1, height: 26, color: borderColor),
+                      _buildInlineTool(
+                        context,
+                        label: 'كشوف الحساب',
+                        icon: Icons.receipt_long_rounded,
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => const CustomerStatementDialog(),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                // 6. Recent Activity Section (Transfers / Shipments)
+                SectionHeader(
+                  title: 'أحدث سندات التحويل والشحنات',
+                  count: provider.transfers.length,
+                  actionLabel: 'عرض الكل',
+                  onAction: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const TransfersListScreen()),
+                    );
+                  },
+                ),
+
+                if (provider.transfers.isEmpty)
+                  EnterpriseEmptyState(
+                    icon: Icons.local_shipping_outlined,
+                    title: 'لا توجد شحنات أو سندات تحويل حالية',
+                    message: 'يمكنك إنشاء سند تحويل جديد بين المستودعات للبدء في تتبع الشحنات',
+                    actionLabel: 'إنشاء سند تحويل جديد',
+                    onAction: () async {
+                      final transferId = await showDialog<String>(
+                        context: context,
+                        builder: (ctx) => const CreateTransferDialog(),
+                      );
+                      if (transferId != null && transferId.isNotEmpty && mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TransferAuditDetailScreen(transferId: transferId),
+                          ),
+                        );
+                      }
+                    },
+                  )
+                else
+                  ...provider.transfers.take(4).map((transfer) {
+                    Widget statusBadge;
+                    if (transfer.status == 'audited_matched') {
+                      statusBadge = StockBadge.matched();
+                    } else if (transfer.status == 'audited_discrepancy') {
+                      statusBadge = StockBadge.discrepancy();
+                    } else {
+                      statusBadge = StockBadge.pending();
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: borderColor, width: 1.1),
+                        boxShadow: isDark
+                            ? []
+                            : [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.02),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => TransferAuditDetailScreen(transferId: transfer.id),
+                              ),
+                            );
+                          },
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                          leading: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isDark ? AppColors.borderDark : const Color(0xFFBFDBFE),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.local_shipping_outlined, size: 20, color: AppColors.primary),
+                            ),
+                          ),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'سند #${transfer.transferNumber}',
+                                  style: AppTypography.cardTitle(
+                                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                                  ).copyWith(fontWeight: FontWeight.w700),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              statusBadge,
+                            ],
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${transfer.fromWarehouse} ← ${transfer.toWarehouse}',
+                                    style: AppTypography.secondary(
+                                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '(${transfer.items.length} صنف)',
+                                  style: AppTypography.smallLabel(
+                                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 14,
+                            color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
               ],
             ),
           );
         },
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'absher_fab',
-            backgroundColor: const Color(0xFF00A86B),
-            icon: Icon(Icons.auto_awesome, color: const Color(0xFFFFD700), size: AppResponsive.iconSize(context, 18)),
-            label: Text(
-              'أبشر حوس ⚡',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: AppResponsive.fontSize(context, 13),
-              ),
+    );
+  }
+
+  Widget _buildInlineTool(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 22,
+              color: isDark ? AppColors.primaryLight : AppColors.primary,
             ),
-            onPressed: () => AbsherHawsuDialog.show(context),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton.extended(
-            heroTag: 'camera_fab',
-            backgroundColor: AppColors.primaryAccent,
-            icon: Icon(Icons.qr_code_scanner, color: Colors.white, size: AppResponsive.iconSize(context, 20)),
-            label: Text(
-              'مسح ضوئي 📷',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: AppResponsive.fontSize(context, 13),
-              ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: AppTypography.smallLabel(
+                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+              ).copyWith(fontSize: 11.5, fontWeight: FontWeight.w600),
             ),
-            onPressed: () {
-              final provider = Provider.of<InventoryProvider>(context, listen: false);
-              if (provider.transfers.isNotEmpty) {
-                Navigator.push(
-                  context,
-                  HawsuPageRoute(
-                    page: TransferAuditDetailScreen(
-                      transferId: provider.transfers.first.id,
-                    ),
-                  ),
-                );
-              } else {
-                Navigator.push(
-                  context,
-                  HawsuPageRoute(page: const LocalStockScreen()),
-                );
-              }
-            },
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

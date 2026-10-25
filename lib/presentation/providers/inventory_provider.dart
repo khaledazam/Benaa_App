@@ -362,4 +362,17 @@ class InventoryProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
   }
+
+  Future<void> seedRealisticTestData() async {
+    _isLoading = true;
+    notifyListeners();
+
+    _dbHelper.seedRealisticTestData(force: true);
+    await loadLocalItems();
+    await loadTransfers();
+    await loadReturns();
+
+    _isLoading = false;
+    notifyListeners();
+  }
 }

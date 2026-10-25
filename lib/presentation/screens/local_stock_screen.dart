@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
 import '../../core/services/haptics_service.dart';
 import '../../data/models/item_model.dart';
 import '../providers/inventory_provider.dart';
 import '../widgets/camera_scanner_dialog.dart';
-
-import '../../core/services/pdf_report_service.dart';
-import '../../core/services/barcode_label_service.dart';
 import '../widgets/item_movement_dialog.dart';
+import '../../core/services/barcode_label_service.dart';
+import '../widgets/enterprise/product_list_tile.dart';
+import '../widgets/enterprise/enterprise_search_field.dart';
+import '../widgets/enterprise/enterprise_button.dart';
+import '../widgets/enterprise/enterprise_dialog.dart';
+import '../widgets/enterprise/enterprise_empty_state.dart';
+import '../../core/services/benaa_warehouse_service.dart';
+import '../../core/services/cloud_auth_service.dart';
 
+/// Professional High-Density Warehouse Inventory Screen for Benaa
 class LocalStockScreen extends StatefulWidget {
   final bool showLowStockOnly;
   const LocalStockScreen({Key? key, this.showLowStockOnly = false}) : super(key: key);
@@ -21,13 +28,291 @@ class LocalStockScreen extends StatefulWidget {
 class _LocalStockScreenState extends State<LocalStockScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  late bool _filterLowStock;
+  String _selectedCategory = 'الكل';
+  final Map<String, CrossWarehouseResult?> _crossWarehouseMap = {};
+  final Set<String> _pendingLookups = {};
 
   @override
   void initState() {
     super.initState();
+    _filterLowStock = widget.showLowStockOnly;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<InventoryProvider>(context, listen: false).loadLocalItems();
     });
+  }
+
+  void _checkCrossWarehouse(ItemModel item) {
+    if (_crossWarehouseMap.containsKey(item.code) || _pendingLookups.contains(item.code)) return;
+    _pendingLookups.add(item.code);
+
+    BenaaWarehouseService.discoverCrossWarehouseStock(
+      skuOrProductId: item.code,
+    ).then((result) {
+      if (mounted) {
+        setState(() {
+          _crossWarehouseMap[item.code] = result;
+          _pendingLookups.remove(item.code);
+        });
+      }
+    }).catchError((_) {
+      if (mounted) {
+        setState(() {
+          _pendingLookups.remove(item.code);
+        });
+      }
+    });
+  }
+
+  void _showRequestTransferDialog(BuildContext context, ItemModel item, CrossWarehouseResult crossRes) {
+    final best = crossRes.bestMatch;
+    if (best == null || best.available <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا توجد كميات متاحة للتحويل في المستودعات الأخرى')),
+      );
+      return;
+    }
+
+    final qtyController = TextEditingController(text: '10');
+    final notesController = TextEditingController(text: 'طلب تحويل عاجل لسد عجز المخزن');
+    final user = CloudAuthService.currentUser;
+    final targetWhId = user?.primaryWarehouseId ?? '6a7f78f2e720fc52f142e03e';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => EnterpriseDialog(
+        title: 'طلب تحويل مخزني بين المستودعات',
+        icon: Icons.swap_horiz_rounded,
+        confirmLabel: 'إرسال طلب التحويل للمشرف',
+        onConfirm: () async {
+          final qty = double.tryParse(qtyController.text) ?? 0;
+          if (qty <= 0 || qty > best.available) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: AppColors.error,
+                content: Text('يرجى إدخال كمية صحيحة بين 1 و ${best.available.toInt()}'),
+              ),
+            );
+            return;
+          }
+
+          final res = await BenaaWarehouseService.requestTransfer(
+            productId: crossRes.productId.isNotEmpty ? crossRes.productId : item.code,
+            fromWarehouseId: best.warehouseId,
+            toWarehouseId: targetWhId,
+            quantity: qty,
+            notes: notesController.text.trim(),
+          );
+
+          await HapticsService.actionSuccess();
+
+          if (ctx.mounted) {
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: AppColors.success,
+                content: Text('تم إرسال طلب تحويل ($qty ${item.unit}) من ${best.warehouseName} بنجاح!'),
+              ),
+            );
+          }
+        },
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.name, style: AppTypography.cardTitle()),
+                  const SizedBox(height: 4),
+                  Text('كود الصنف: ${item.code}', style: AppTypography.smallLabel(color: AppColors.textSecondary)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          crossRes.discoveryMessage,
+                          style: AppTypography.smallLabel(color: AppColors.success).copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('من مستودع (المصدر):', style: AppTypography.smallLabel(color: AppColors.textSecondary)),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceMuted,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(best.warehouseName, style: AppTypography.body()),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('إلى مستودع (الوجهة):', style: AppTypography.smallLabel(color: AppColors.textSecondary)),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceMuted,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(user?.primaryWarehouseName ?? 'مستودعك الحالي', style: AppTypography.body()),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: qtyController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'الكمية المطلوبة للتحويل (${item.unit})',
+                helperText: 'الحد الأقصى المتاح حالياً: ${best.available.toInt()} ${item.unit}',
+                prefixIcon: const Icon(Icons.format_list_numbered_rounded, size: 20),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: notesController,
+              decoration: const InputDecoration(
+                labelText: 'ملاحظات وتوجيهات التحويل',
+                prefixIcon: Icon(Icons.note_alt_outlined, size: 20),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showItemOptions(BuildContext context, ItemModel item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : AppColors.surface;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: AppTypography.cardTitle(
+                          color: isDark ? const Color(0xFFF8FAFC) : AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'كود: ${item.code} | الرصيد الحالي: ${item.currentStock % 1 == 0 ? item.currentStock.toInt() : item.currentStock} ${item.unit}',
+                        style: AppTypography.secondary(
+                          color: isDark ? const Color(0xFF94A3B8) : AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined, size: 20),
+                  title: const Text('تعديل الرصيد الفعلي'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showAdjustStockDialog(context, item);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.history_rounded, size: 20),
+                  title: const Text('سجل حركات الصنف (كارت الصنف)'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    showDialog(
+                      context: context,
+                      builder: (_) => ItemMovementDialog(item: item),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.print_outlined, size: 20),
+                  title: const Text('طباعة ملصق الباركود'),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await BarcodeLabelService.printThermalStickerLabel(
+                      item: item,
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
+                  title: const Text('حذف الصنف من المستودع', style: TextStyle(color: AppColors.error)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final confirm = await EnterpriseDialog.showConfirmation(
+                      context: context,
+                      title: 'تأكيد حذف الصنف',
+                      message: 'هل أنت متأكد من حذف الصنف (${item.name}) نهائياً من المستودع؟',
+                      confirmLabel: 'حذف نهائي',
+                      isDestructive: true,
+                      icon: Icons.delete_outline_rounded,
+                    );
+                    if (confirm == true && mounted) {
+                      await Provider.of<InventoryProvider>(context, listen: false).deleteItem(item.code);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          backgroundColor: AppColors.success,
+                          content: Text('تم حذف الصنف بنجاح'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showAddNewItemDialog(BuildContext context, {String initialBarcode = ''}) {
@@ -40,227 +325,98 @@ class _LocalStockScreenState extends State<LocalStockScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (ctx) => EnterpriseDialog(
+        title: 'تسجيل منتج جديد بالمستودع',
+        icon: Icons.add_business_outlined,
+        confirmLabel: 'إضافة للمخزن',
+        onConfirm: () async {
+          if (nameController.text.trim().isEmpty) return;
+          final provider = Provider.of<InventoryProvider>(context, listen: false);
+          await provider.registerNewScannedItem(
+            barcode: barcodeController.text.trim(),
+            itemName: nameController.text.trim(),
+            category: categoryController.text.trim(),
+            unit: unitController.text.trim(),
+            initialQty: double.tryParse(qtyController.text) ?? 0.0,
+            location: locationController.text.trim(),
+          );
+          await HapticsService.actionSuccess();
+          if (ctx.mounted) {
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: AppColors.success,
+                content: Text('تمت إضافة الصنف (${nameController.text.trim()}) بنجاح!'),
+              ),
+            );
+          }
+        },
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add_business_outlined, color: AppColors.success),
-            Text(
-              'تسجيل منتج جديد بالمخزن',
-              style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+            TextField(
+              controller: barcodeController,
+              decoration: const InputDecoration(labelText: 'كود / باركود الصنف'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'اسم الصنف التجاري',
+                hintText: 'مثال: بديل خشب، زاوية جدار 3م...',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: unitController.text,
+                    decoration: const InputDecoration(labelText: 'الوحدة'),
+                    items: const [
+                      DropdownMenuItem(value: 'حبة', child: Text('حبة / قطعة')),
+                      DropdownMenuItem(value: 'لوح', child: Text('لوح')),
+                      DropdownMenuItem(value: 'متر مربع', child: Text('متر مربع (m²)')),
+                      DropdownMenuItem(value: 'كرتونة', child: Text('كرتونة')),
+                      DropdownMenuItem(value: 'طبلية', child: Text('طبلية')),
+                      DropdownMenuItem(value: 'كيس', child: Text('كيس')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) unitController.text = val;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: categoryController,
+                    decoration: const InputDecoration(labelText: 'التصنيف'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: qtyController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'الرصيد الافتتاحي'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: locationController,
+                    decoration: const InputDecoration(labelText: 'الممر والرف'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: barcodeController,
-                style: const TextStyle(color: AppColors.textPrimary),
-                decoration: const InputDecoration(
-                  labelText: 'كود / باركود المنتَج',
-                  labelStyle: TextStyle(color: AppColors.textSecondary),
-                ),
-              ),
-              const SizedBox(height: 10),
-              // Product Name Input with Live Autocomplete Suggestions
-              Consumer<InventoryProvider>(
-                builder: (context, provider, _) {
-                  final allItems = provider.localItems;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      RawAutocomplete<ItemModel>(
-                        textEditingController: nameController,
-                        focusNode: FocusNode(),
-                        optionsBuilder: (TextEditingValue textEditingValue) {
-                          if (textEditingValue.text.isEmpty) {
-                            return const Iterable<ItemModel>.empty();
-                          }
-                          final query = textEditingValue.text.toLowerCase();
-                          return allItems.where((ItemModel option) {
-                            return option.name.toLowerCase().contains(query) ||
-                                option.code.toLowerCase().contains(query);
-                          });
-                        },
-                        displayStringForOption: (ItemModel option) => option.name,
-                        onSelected: (ItemModel selection) {
-                          nameController.text = selection.name;
-                          barcodeController.text = selection.code;
-                          categoryController.text = selection.category;
-                          unitController.text = selection.unit;
-                          locationController.text = selection.location ?? locationController.text;
-                        },
-                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                          return TextField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 13, fontWeight: FontWeight.bold),
-                            decoration: InputDecoration(
-                              labelText: 'اسم المنتَج / الصنف (اكتب أول حروف للتجميع والإكمال)',
-                              hintText: 'مثال: بديل خشب، كورنر تيب...',
-                              labelStyle: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11),
-                              suffixIcon: const Icon(Icons.search, size: 18, color: AppColors.primaryAccent),
-                            ),
-                          );
-                        },
-                        optionsViewBuilder: (context, onSelected, options) {
-                          return Align(
-                            alignment: Alignment.topRight,
-                            child: Material(
-                              elevation: 6,
-                              color: AppColors.getCardBg(context),
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                constraints: const BoxConstraints(maxHeight: 180, maxWidth: 350),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.primaryAccent),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: ListView.separated(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  shrinkWrap: true,
-                                  itemCount: options.length,
-                                  separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.borderDark),
-                                  itemBuilder: (BuildContext context, int index) {
-                                    final ItemModel option = options.elementAt(index);
-                                    return ListTile(
-                                      dense: true,
-                                      title: Text(
-                                        option.name,
-                                        style: TextStyle(color: AppColors.getTextPrimary(context), fontWeight: FontWeight.bold, fontSize: 13),
-                                        textAlign: TextAlign.right,
-                                      ),
-                                      subtitle: Text(
-                                        'كود: ${option.code} | الرصيد الحالي: ${option.currentStock.toInt()} ${option.unit}',
-                                        style: const TextStyle(color: AppColors.success, fontSize: 11),
-                                        textAlign: TextAlign.right,
-                                      ),
-                                      onTap: () => onSelected(option),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-              Builder(
-                builder: (context) {
-                  final standardUnits = ['حبة', 'لوح', 'متر', 'متر مربع', 'كرتونة', 'طبلية', 'كيس', 'طن', 'كجم', 'ربطة', 'حزمة', 'علبة', 'طرد', 'جالون', 'لتر'];
-                  final currentVal = unitController.text.trim().isNotEmpty ? unitController.text.trim() : 'حبة';
-                  final itemsList = standardUnits.contains(currentVal) ? standardUnits : [...standardUnits, currentVal];
-
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: currentVal,
-                          dropdownColor: AppColors.getCardBg(context),
-                          style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 13),
-                          decoration: const InputDecoration(
-                            labelText: 'وحدة القياس / التعبئة',
-                            labelStyle: TextStyle(color: AppColors.textSecondary),
-                          ),
-                          items: itemsList.map((u) {
-                            return DropdownMenuItem<String>(
-                              value: u,
-                              child: Text(u == 'حبة' ? 'حبة / قطعة' : u == 'متر مربع' ? 'متر مربع (m²)' : u == 'طبلية' ? 'طبلية / لوح' : u),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              unitController.text = val;
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: categoryController,
-                          style: const TextStyle(color: AppColors.textPrimary),
-                          decoration: const InputDecoration(
-                            labelText: 'التصنيف',
-                            labelStyle: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: qtyController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold),
-                      decoration: const InputDecoration(
-                        labelText: 'الرصيد الأولي',
-                        labelStyle: TextStyle(color: AppColors.textSecondary),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: locationController,
-                      style: const TextStyle(color: AppColors.info, fontWeight: FontWeight.bold),
-                      decoration: const InputDecoration(
-                        labelText: 'الممر والرف بالمستودع',
-                        labelStyle: TextStyle(color: AppColors.textSecondary),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('إلغاء', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              final provider = Provider.of<InventoryProvider>(context, listen: false);
-              await provider.registerNewScannedItem(
-                barcode: barcodeController.text.trim(),
-                itemName: nameController.text.trim(),
-                category: categoryController.text.trim(),
-                unit: unitController.text.trim(),
-                initialQty: double.tryParse(qtyController.text) ?? 0.0,
-                location: locationController.text.trim(),
-              );
-              await HapticsService.actionSuccess();
-              if (ctx.mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: AppColors.success,
-                    content: Text('تم إضافة/تحديث رصيد الصنف (${nameController.text.trim()}) بنجاح في المستودع! 📦'),
-                  ),
-                );
-              }
-            },
-            child: const Text('إضافة للمخزن'),
-          ),
-        ],
       ),
     );
   }
@@ -271,406 +427,329 @@ class _LocalStockScreenState extends State<LocalStockScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Icon(Icons.edit_note, color: AppColors.warning),
-            Text(
-              'تعديل رصيد المخزون (${item.code})',
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+      builder: (ctx) => EnterpriseDialog(
+        title: 'تعديل رصيد المخزون',
+        icon: Icons.edit_note_rounded,
+        confirmLabel: 'حفظ التعديل',
+        onConfirm: () async {
+          final newStock = double.tryParse(stockController.text) ?? item.currentStock;
+          final provider = Provider.of<InventoryProvider>(context, listen: false);
+          await provider.adjustItemStockDirectly(
+            item.code,
+            newStock,
+            noteController.text.trim().isNotEmpty ? noteController.text.trim() : 'تعديل رصيد يدوي',
+          );
+          await HapticsService.actionSuccess();
+          if (ctx.mounted) {
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: AppColors.success,
+                content: Text('تم تعديل رصيد (${item.name}) إلى $newStock ${item.unit}'),
+              ),
+            );
+          }
+        },
         content: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
               item.name,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              textAlign: TextAlign.right,
+              style: AppTypography.cardTitle(),
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.remove_circle_outline, color: AppColors.danger, size: 28),
-                  onPressed: () {
-                    final cur = double.tryParse(stockController.text) ?? 0.0;
-                    if (cur > 0) {
-                      stockController.text = (cur - 1).toString();
-                    }
-                  },
-                ),
-                SizedBox(
-                  width: 100,
-                  child: TextField(
-                    controller: stockController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 18),
-                    decoration: const InputDecoration(
-                      labelText: 'الرصيد الجديد',
-                      labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, color: AppColors.success, size: 28),
-                  onPressed: () {
-                    final cur = double.tryParse(stockController.text) ?? 0.0;
-                    stockController.text = (cur + 1).toString();
-                  },
-                ),
-              ],
+            const SizedBox(height: 14),
+            TextField(
+              controller: stockController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.center,
+              style: AppTypography.tabularNumber(fontSize: 18),
+              decoration: InputDecoration(
+                labelText: 'الرصيد الفعلي الجديد (${item.unit})',
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: noteController,
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
               decoration: const InputDecoration(
-                labelText: 'سبب التعديل / ملاحظات',
-                labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                labelText: 'سبب التعديل / ملاحظات الجرد',
               ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('إلغاء', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
-            onPressed: () async {
-              final newStock = double.tryParse(stockController.text) ?? item.currentStock;
-              final provider = Provider.of<InventoryProvider>(context, listen: false);
-              await provider.adjustItemStockDirectly(item.code, newStock, noteController.text.trim());
-              await HapticsService.actionSuccess();
-              if (ctx.mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: AppColors.success,
-                    content: Text('تم تعديل رصيد صنف (${item.name}) إلى $newStock بنجاح!'),
-                  ),
-                );
-              }
-            },
-            child: const Text('تعديل وتحديث الرصيد'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmDeleteItem(BuildContext context, ItemModel item) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.getCardBg(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('⚠️ تأكيد حذف الصنف', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold), textAlign: TextAlign.right),
-        content: Text(
-          'هل أنت متأكد من حذف الصنف "${item.name}" (كود: ${item.code}) نهائياً من المستودع؟\n\nتنبيه: سيتم مسح الصنف وسجلاته من المخزن.',
-          style: TextStyle(color: AppColors.getTextPrimary(context), fontSize: 13),
-          textAlign: TextAlign.right,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('إلغاء', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await Provider.of<InventoryProvider>(context, listen: false).deleteItem(item.code);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: AppColors.success,
-                    content: Text('تم حذف الصنف (${item.name}) من المخزن بنجاح 🗑️'),
-                  ),
-                );
-              }
-            },
-            child: const Text('نعم، حذف الصنف'),
-          ),
-        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.getBg(context),
       appBar: AppBar(
-        title: Text(widget.showLowStockOnly ? '⚠️ أصناف وشيكة النفاذ (بريدة)' : 'رصيد مستودع بريدة (القصيم)'),
+        title: const Text('سجل المخزون والأصناف'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.picture_as_pdf, color: AppColors.primaryAccent),
-            tooltip: 'تصدير تقرير الجرد (PDF / Excel)',
-            onPressed: () async {
-              final provider = Provider.of<InventoryProvider>(context, listen: false);
-              final lowStockCount = provider.localItems.where((i) => i.currentStock <= 15.0).length;
-              final valuation = provider.localItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * i.unitPrice));
-              await PdfReportService.printOrPreviewReport(
-                items: provider.localItems,
-                totalValuation: valuation,
-                lowStockCount: lowStockCount,
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_circle, color: AppColors.success),
-            tooltip: 'إضافة منتج جديد للمخزن',
+            icon: const Icon(Icons.add_rounded, size: 22),
+            tooltip: 'إضافة صنف جديد',
             onPressed: () => _showAddNewItemDialog(context),
           ),
         ],
       ),
       body: Consumer<InventoryProvider>(
         builder: (context, provider, child) {
-          var baseItems = widget.showLowStockOnly
-              ? provider.localItems.where((i) => i.currentStock <= 15.0).toList()
-              : provider.localItems;
+          final allItems = provider.localItems;
+          final lowStockCount = allItems.where((i) => i.currentStock <= 15).length;
+          final totalValuation = allItems.fold<double>(0.0, (sum, i) => sum + (i.currentStock * i.unitPrice));
 
-          final items = _query.isEmpty
-              ? baseItems
-              : baseItems.where((i) {
-                  final q = _query.toLowerCase();
-                  return i.code.toLowerCase().contains(q) ||
-                      i.name.toLowerCase().contains(q) ||
-                      i.category.toLowerCase().contains(q);
-                }).toList();
+          // Extract distinct categories
+          final categories = <String>['الكل'];
+          for (var item in allItems) {
+            if (item.category.isNotEmpty && !categories.contains(item.category)) {
+              categories.add(item.category);
+            }
+          }
+
+          final filtered = allItems.where((item) {
+            final matchesQuery = _query.isEmpty ||
+                item.name.toLowerCase().contains(_query.toLowerCase()) ||
+                item.code.toLowerCase().contains(_query.toLowerCase()) ||
+                item.category.toLowerCase().contains(_query.toLowerCase());
+
+            final matchesCategory = _selectedCategory == 'الكل' || item.category == _selectedCategory;
+
+            if (_filterLowStock) {
+              return matchesQuery && matchesCategory && (item.currentStock <= 15.0);
+            }
+            return matchesQuery && matchesCategory;
+          }).toList();
 
           return Column(
             children: [
-              if (widget.showLowStockOnly)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  color: AppColors.danger.withOpacity(0.15),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'عدد الأصناف وشيكة النفاذ: ${items.length}',
-                        style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      const Text(
-                        '⚠️ الرصيد المتبقي أقل من 15 حبة',
-                        style: TextStyle(color: AppColors.danger, fontSize: 11),
-                      ),
-                    ],
+              // 1. Top Metrics Summary Bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isDark ? AppColors.borderDark : const Color(0xFFE2E8F0),
+                      width: 1,
+                    ),
                   ),
                 ),
-
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (val) => setState(() => _query = val),
-                  style: TextStyle(color: AppColors.getTextPrimary(context)),
-                  decoration: InputDecoration(
-                    hintText: 'ابحث عن صنف بالأسم، التصنيف، أو الكود',
-                    hintStyle: TextStyle(color: AppColors.getTextSecondary(context)),
-                    prefixIcon: Icon(Icons.search, color: AppColors.getTextSecondary(context)),
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${allItems.length} صنف مسجل',
+                            style: AppTypography.smallLabel(color: AppColors.primary).copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${totalValuation.toStringAsFixed(0)} ر.س',
+                          style: AppTypography.tabularNumber(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                          ),
+                        ),
+                      ],
+                    ),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _filterLowStock = !_filterLowStock;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _filterLowStock
+                              ? AppColors.error
+                              : AppColors.error.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: AppColors.error.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              size: 13,
+                              color: _filterLowStock ? Colors.white : AppColors.error,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'وشيك النفاذ ($lowStockCount)',
+                              style: AppTypography.smallLabel(
+                                color: _filterLowStock ? Colors.white : AppColors.error,
+                              ).copyWith(fontWeight: FontWeight.w700, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Expanded(
-                child: items.isEmpty
-                    ? Center(child: Text('لا توجد أصناف بالمخزون حالياً', style: TextStyle(color: AppColors.getTextSecondary(context))))
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        itemCount: items.length,
-                        itemBuilder: (ctx, idx) {
-                          final item = items[idx];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            color: AppColors.getCardBg(context),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(
-                                color: item.currentStock <= 15.0 ? AppColors.danger : AppColors.getBorder(context),
-                                width: item.currentStock <= 15.0 ? 1.5 : 1.0,
+
+              // 2. Search & Category Bar
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isDark ? AppColors.borderDark : const Color(0xFFE2E8F0),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    EnterpriseSearchField(
+                      controller: _searchController,
+                      onChanged: (val) => setState(() => _query = val.trim()),
+                      onScanPressed: () async {
+                        final code = await showDialog<String>(
+                          context: context,
+                          builder: (_) => const CameraScannerDialog(),
+                        );
+                        if (code != null && code.isNotEmpty) {
+                          _searchController.text = code;
+                          setState(() => _query = code.trim());
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    // Category Chips Scroll
+                    SizedBox(
+                      height: 32,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: categories.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 6),
+                        itemBuilder: (context, idx) {
+                          final cat = categories[idx];
+                          final isSelected = _selectedCategory == cat;
+                          return InkWell(
+                            onTap: () {
+                              setState(() {
+                                _selectedCategory = cat;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : (isDark ? AppColors.borderDark : const Color(0xFFCBD5E1)),
+                                  width: 1,
+                                ),
                               ),
-                            ),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (c) => ItemMovementDialog(item: item),
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(14),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    // Row 1: Header (Stock Badge + Category Tag + Code)
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        // Stock Quantity Badge
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: (item.currentStock > 15.0 ? AppColors.success : AppColors.danger).withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color: item.currentStock > 15.0 ? AppColors.success : AppColors.danger,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            '${item.currentStock.toInt()} ${item.unit}',
-                                            style: TextStyle(
-                                              color: item.currentStock > 15.0 ? AppColors.success : AppColors.danger,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                        // Category & Code Badges
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.getBg(context),
-                                                borderRadius: BorderRadius.circular(6),
-                                                border: Border.all(color: AppColors.getBorder(context)),
-                                              ),
-                                              child: Text(
-                                                item.category,
-                                                style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primaryAccent.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                'كود ${item.code}',
-                                                style: const TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-
-                                    const SizedBox(height: 10),
-
-                                    // Row 2: Full Item Name
-                                    Text(
-                                      item.name,
-                                      style: TextStyle(
-                                        color: AppColors.getTextPrimary(context),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                      ),
-                                      textAlign: TextAlign.right,
-                                    ),
-
-                                    // Row 3: Price Info
-                                    if (item.unitPrice > 0)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(
-                                          'سعر الوحدة: ${item.unitPrice.toStringAsFixed(2)} ر.س | القيمة الإجمالية: ${(item.currentStock * item.unitPrice).toStringAsFixed(2)} ر.س',
-                                          style: TextStyle(color: AppColors.getTextSecondary(context), fontSize: 11),
-                                          textAlign: TextAlign.right,
-                                        ),
-                                      ),
-
-                                    Divider(height: 20, color: AppColors.getBorder(context).withOpacity(0.5)),
-
-                                    // Row 4: Action Toolbar (Spread evenly)
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        // Print Barcode
-                                        OutlinedButton.icon(
-                                          icon: const Icon(Icons.qr_code, color: AppColors.info, size: 16),
-                                          label: const Text('باركود', style: TextStyle(color: AppColors.info, fontSize: 11)),
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(color: AppColors.info.withOpacity(0.5)),
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            minimumSize: const Size(60, 32),
-                                          ),
-                                          onPressed: () async {
-                                            await BarcodeLabelService.printThermalStickerLabel(item: item);
-                                          },
-                                        ),
-                                        // History
-                                        OutlinedButton.icon(
-                                          icon: const Icon(Icons.history, color: AppColors.primaryAccent, size: 16),
-                                          label: const Text('الحركات', style: TextStyle(color: AppColors.primaryAccent, fontSize: 11)),
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(color: AppColors.primaryAccent.withOpacity(0.5)),
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            minimumSize: const Size(60, 32),
-                                          ),
-                                          onPressed: () {
-                                            showDialog(
-                                              context: context,
-                                              builder: (c) => ItemMovementDialog(item: item),
-                                            );
-                                          },
-                                        ),
-                                        // Edit Stock
-                                        OutlinedButton.icon(
-                                          icon: const Icon(Icons.edit_note, color: AppColors.warning, size: 16),
-                                          label: const Text('تعديل', style: TextStyle(color: AppColors.warning, fontSize: 11)),
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(color: AppColors.warning.withOpacity(0.5)),
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            minimumSize: const Size(60, 32),
-                                          ),
-                                          onPressed: () => _showAdjustStockDialog(context, item),
-                                        ),
-                                        // Delete Item
-                                        OutlinedButton.icon(
-                                          icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 16),
-                                          label: const Text('حذف', style: TextStyle(color: AppColors.danger, fontSize: 11)),
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(color: AppColors.danger.withOpacity(0.5)),
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            minimumSize: const Size(60, 32),
-                                          ),
-                                          onPressed: () => _confirmDeleteItem(context, item),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                              child: Center(
+                                child: Text(
+                                  cat,
+                                  style: AppTypography.smallLabel(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : (isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155)),
+                                  ).copyWith(
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    fontSize: 11.5,
+                                  ),
                                 ),
                               ),
                             ),
                           );
                         },
                       ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 3. Products List
+              Expanded(
+                child: filtered.isEmpty
+                    ? EnterpriseEmptyState(
+                        icon: Icons.inventory_2_outlined,
+                        title: _query.isNotEmpty || _selectedCategory != 'الكل'
+                            ? 'لا توجد نتائج مطابقة لبحثك'
+                            : 'لا توجد أصناف مسجلة في المستودع',
+                        message: _query.isNotEmpty || _selectedCategory != 'الكل'
+                            ? 'جرب البحث برقم أو كود صنف آخر أو اختر تصنيفاً مختلفاً'
+                            : 'يمكنك البدء بإضافة أصناف جديدة أو تحميل البيانات التجريبية للاختبار',
+                        actionLabel: _query.isNotEmpty || _selectedCategory != 'الكل'
+                            ? 'مسح الفلاتر'
+                            : 'إضافة صنف جديد',
+                        onAction: () {
+                          if (_query.isNotEmpty || _selectedCategory != 'الكل' || _filterLowStock) {
+                            _searchController.clear();
+                            setState(() {
+                              _query = '';
+                              _selectedCategory = 'الكل';
+                              _filterLowStock = false;
+                            });
+                          } else {
+                            _showAddNewItemDialog(context);
+                          }
+                        },
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () async => await provider.loadLocalItems(),
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final item = filtered[index];
+                            if (item.currentStock <= 0) {
+                              _checkCrossWarehouse(item);
+                            }
+                            final crossRes = _crossWarehouseMap[item.code];
+
+                            return ProductListTile(
+                              itemCode: item.code,
+                              itemName: item.name,
+                              category: item.category,
+                              warehouseName: item.location,
+                              currentStock: item.currentStock,
+                              primaryUnit: item.unit,
+                              crossWarehouseDiscoveryMessage: crossRes?.discoveryMessage,
+                              onRequestTransfer: crossRes != null && crossRes.bestMatch != null
+                                  ? () => _showRequestTransferDialog(context, item, crossRes)
+                                  : null,
+                              onTap: () => _showItemOptions(context, item),
+                            );
+                          },
+                        ),
+                      ),
               ),
             ],
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.success,
-        icon: const Icon(Icons.add_box, color: Colors.white),
-        label: const Text('إضافة منتج للمخزن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        onPressed: () => _showAddNewItemDialog(context),
       ),
     );
   }

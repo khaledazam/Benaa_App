@@ -1,241 +1,264 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
+import 'app_typography.dart';
 
+/// Professional Enterprise Material 3 Theme Configuration for Benaa
 class AppTheme {
-  /// ثيم النسخة الداكنة (Dark Theme) مجهزة بخط Tajawal عالي الوضوح وأيقونات مكبّرة
-  static ThemeData get darkTheme {
-    final baseTextTheme = ThemeData.dark().textTheme;
-    final tajawalTextTheme = GoogleFonts.tajawalTextTheme(baseTextTheme);
+  /// Base text theme builder using IBM Plex Sans Arabic with Tajawal fallback
+  static TextTheme _buildTextTheme(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+    final secondaryColor = isDark ? const Color(0xFF94A3B8) : AppColors.textSecondary;
 
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      primaryColor: AppColors.primaryAccent,
-      scaffoldBackgroundColor: AppColors.bgDark,
-      cardColor: AppColors.bgCard,
-      textTheme: tajawalTextTheme.apply(
-        bodyColor: AppColors.textPrimary,
-        displayColor: AppColors.textPrimary,
-      ),
-      colorScheme: const ColorScheme.dark(
-        primary: AppColors.primaryAccent,
-        secondary: AppColors.success,
-        surface: AppColors.bgCard,
-        error: AppColors.danger,
-      ),
-      iconTheme: const IconThemeData(
-        color: AppColors.primaryAccent,
-        size: 26,
-      ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.bgCard,
-        elevation: 1,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: AppColors.primaryAccent, size: 26),
-        actionsIconTheme: const IconThemeData(color: AppColors.primaryAccent, size: 26),
-        titleTextStyle: GoogleFonts.tajawal(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-        ),
-      ),
-      cardTheme: CardThemeData(
-        color: AppColors.bgCard,
-        elevation: 3,
-        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.borderDark, width: 1.2),
-        ),
-      ),
-      dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.bgCard,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        titleTextStyle: GoogleFonts.tajawal(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: AppColors.bgSurface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        hintStyle: GoogleFonts.tajawal(color: AppColors.textSecondary, fontSize: 14),
-        labelStyle: GoogleFonts.tajawal(color: AppColors.textSecondary, fontSize: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderDark),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderDark),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primaryAccent, width: 2),
-        ),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryAccent,
-          foregroundColor: Colors.white,
-          elevation: 3,
-          minimumSize: const Size(88, 48), // Touch target target >= 48px
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 22),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          textStyle: GoogleFonts.tajawal(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primaryAccent,
-          minimumSize: const Size(88, 48),
-          side: const BorderSide(color: AppColors.primaryAccent, width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 22),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          textStyle: GoogleFonts.tajawal(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.primaryAccent,
-          minimumSize: const Size(64, 44),
-          textStyle: GoogleFonts.tajawal(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+    TextTheme baseTheme;
+    try {
+      baseTheme = GoogleFonts.ibmPlexSansArabicTextTheme(
+        isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+      );
+    } catch (_) {
+      baseTheme = GoogleFonts.tajawalTextTheme(
+        isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+      );
+    }
+
+    return baseTheme.copyWith(
+      headlineLarge: AppTypography.screenTitle(color: primaryColor),
+      headlineMedium: AppTypography.screenTitle(color: primaryColor).copyWith(fontSize: 20),
+      titleLarge: AppTypography.sectionHeading(color: primaryColor),
+      titleMedium: AppTypography.cardTitle(color: primaryColor),
+      titleSmall: AppTypography.cardTitle(color: primaryColor).copyWith(fontSize: 14),
+      bodyLarge: AppTypography.bodyBold(color: primaryColor),
+      bodyMedium: AppTypography.body(color: primaryColor),
+      bodySmall: AppTypography.secondary(color: secondaryColor),
+      labelLarge: AppTypography.bodyBold(color: primaryColor),
+      labelMedium: AppTypography.smallLabel(color: secondaryColor),
+      labelSmall: AppTypography.smallLabel(color: secondaryColor).copyWith(fontSize: 10),
     );
   }
 
-  /// ثيم النسخة الفاتحة (Light Theme) مجهزة بخط Tajawal عالي الوضوح وأيقونات واضحة
+  /// Enterprise Light Theme (Default Commercial UI)
   static ThemeData get lightTheme {
-    final baseTextTheme = ThemeData.light().textTheme;
-    final tajawalTextTheme = GoogleFonts.tajawalTextTheme(baseTextTheme);
+    final textTheme = _buildTextTheme(Brightness.light);
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      primaryColor: AppColors.primaryAccent,
-      scaffoldBackgroundColor: AppColors.bgLight,
-      cardColor: AppColors.cardLight,
-      textTheme: tajawalTextTheme.apply(
-        bodyColor: AppColors.textDarkPrimary,
-        displayColor: AppColors.textDarkPrimary,
-      ),
+      primaryColor: AppColors.primary,
+      scaffoldBackgroundColor: AppColors.background,
+      cardColor: AppColors.surface,
+      dividerColor: AppColors.border,
+      textTheme: textTheme,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.primaryAccent,
-        secondary: AppColors.success,
-        surface: AppColors.cardLight,
-        error: AppColors.danger,
+        primary: AppColors.primary,
+        onPrimary: Colors.white,
+        primaryContainer: AppColors.surfaceMuted,
+        secondary: AppColors.primaryLight,
+        surface: AppColors.surface,
+        onSurface: AppColors.textPrimary,
+        error: AppColors.error,
+        onError: Colors.white,
       ),
       iconTheme: const IconThemeData(
-        color: AppColors.primaryAccent,
-        size: 26,
+        color: AppColors.primary,
+        size: 22,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: AppColors.primaryAccent, size: 26),
-        actionsIconTheme: const IconThemeData(color: AppColors.primaryAccent, size: 26),
-        titleTextStyle: GoogleFonts.tajawal(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textDarkPrimary,
-        ),
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        centerTitle: false,
+        iconTheme: const IconThemeData(color: AppColors.primary, size: 22),
+        actionsIconTheme: const IconThemeData(color: AppColors.primary, size: 22),
+        titleTextStyle: AppTypography.sectionHeading(color: AppColors.textPrimary).copyWith(fontSize: 18),
+        shape: const Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.cardLight,
-        elevation: 2,
-        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        color: AppColors.surface,
+        elevation: 0,
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.borderLight, width: 1),
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border, width: 1),
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.cardLight,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        titleTextStyle: GoogleFonts.tajawal(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textDarkPrimary,
+        backgroundColor: AppColors.surface,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.border, width: 1),
         ),
+        titleTextStyle: AppTypography.sectionHeading(color: AppColors.textPrimary),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        hintStyle: GoogleFonts.tajawal(color: AppColors.textDarkSecondary, fontSize: 14),
-        labelStyle: GoogleFonts.tajawal(color: AppColors.textDarkSecondary, fontSize: 14),
+        fillColor: AppColors.surface,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        hintStyle: AppTypography.body(color: AppColors.textMuted),
+        labelStyle: AppTypography.body(color: AppColors.textSecondary),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderLight),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderLight),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primaryAccent, width: 2),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.error, width: 1),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryAccent,
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          elevation: 3,
-          minimumSize: const Size(88, 48), // Touch target >= 48px
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 22),
+          elevation: 0,
+          minimumSize: const Size(88, 44),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(10),
           ),
-          textStyle: GoogleFonts.tajawal(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          textStyle: AppTypography.bodyBold(color: Colors.white),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primaryAccent,
-          minimumSize: const Size(88, 48),
-          side: const BorderSide(color: AppColors.primaryAccent, width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 22),
+          foregroundColor: AppColors.primary,
+          minimumSize: const Size(88, 44),
+          side: const BorderSide(color: AppColors.border, width: 1.2),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(10),
           ),
-          textStyle: GoogleFonts.tajawal(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-          ),
+          textStyle: AppTypography.bodyBold(color: AppColors.primary),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primaryAccent,
-          minimumSize: const Size(64, 44),
-          textStyle: GoogleFonts.tajawal(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
+          foregroundColor: AppColors.primary,
+          minimumSize: const Size(64, 40),
+          textStyle: AppTypography.bodyBold(color: AppColors.primary),
+        ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: AppColors.surface,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.textSecondary,
+        elevation: 0,
+        type: BottomNavigationBarType.fixed,
+      ),
+    );
+  }
+
+  /// Enterprise Dark Theme (Sleek dark mode preserving semantic tokens)
+  static ThemeData get darkTheme {
+    final textTheme = _buildTextTheme(Brightness.dark);
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      primaryColor: AppColors.primaryLight,
+      scaffoldBackgroundColor: const Color(0xFF0F172A),
+      cardColor: const Color(0xFF1E293B),
+      dividerColor: AppColors.borderDark,
+      textTheme: textTheme,
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.primaryLight,
+        onPrimary: Colors.white,
+        surface: Color(0xFF1E293B),
+        onSurface: Color(0xFFF8FAFC),
+        error: AppColors.error,
+        onError: Colors.white,
+      ),
+      iconTheme: const IconThemeData(
+        color: AppColors.primaryLight,
+        size: 22,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: const Color(0xFF1E293B),
+        foregroundColor: const Color(0xFFF8FAFC),
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        centerTitle: false,
+        iconTheme: const IconThemeData(color: AppColors.primaryLight, size: 22),
+        actionsIconTheme: const IconThemeData(color: AppColors.primaryLight, size: 22),
+        titleTextStyle: AppTypography.sectionHeading(color: const Color(0xFFF8FAFC)).copyWith(fontSize: 18),
+        shape: const Border(bottom: BorderSide(color: AppColors.borderDark, width: 1)),
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF1E293B),
+        elevation: 0,
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.borderDark, width: 1),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: const Color(0xFF1E293B),
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.borderDark, width: 1),
+        ),
+        titleTextStyle: AppTypography.sectionHeading(color: const Color(0xFFF8FAFC)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFF0F172A),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        hintStyle: AppTypography.body(color: const Color(0xFF64748B)),
+        labelStyle: AppTypography.body(color: const Color(0xFF94A3B8)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.borderDark, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.borderDark, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.primaryLight, width: 1.5),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primaryLight,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          minimumSize: const Size(88, 44),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
+          textStyle: AppTypography.bodyBold(color: Colors.white),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primaryLight,
+          minimumSize: const Size(88, 44),
+          side: const BorderSide(color: AppColors.borderDark, width: 1.2),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          textStyle: AppTypography.bodyBold(color: AppColors.primaryLight),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primaryLight,
+          minimumSize: const Size(64, 40),
+          textStyle: AppTypography.bodyBold(color: AppColors.primaryLight),
         ),
       ),
     );
