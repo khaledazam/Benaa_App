@@ -41,6 +41,91 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
+  void _showCreateWarehouseDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final codeController = TextEditingController();
+    final addressController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => EnterpriseDialog(
+        title: 'إضافة فرع / مستودع جديد',
+        icon: Icons.add_business_rounded,
+        confirmLabel: 'حفظ واعتماد المستودع',
+        onConfirm: () async {
+          final name = nameController.text.trim();
+          final code = codeController.text.trim();
+          final address = addressController.text.trim();
+
+          if (name.isEmpty || code.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: AppColors.error,
+                content: Text('يرجى إدخال اسم المستودع ورمزه التعريفي (Code)'),
+              ),
+            );
+            return;
+          }
+
+          await CloudAuthService.provisionNewWarehouse(
+            name: name,
+            code: code,
+            address: address.isNotEmpty ? address : null,
+          );
+
+          await HapticsService.actionSuccess();
+
+          if (ctx.mounted) {
+            Navigator.pop(ctx);
+            _loadData();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: AppColors.success,
+                content: Text('تمت إضافة فرع ($name) بنجاح وأصبح متاحاً لتعيين المشرفين والأمناء.'),
+              ),
+            );
+          }
+        },
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'إضافة مستودع أو فرع جديد لمنظومة شركة بناء للديكور وتخصيص إدارته للمشرفين والموظفين.',
+                style: AppTypography.secondary(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'اسم المستودع (مثال: مستودع بريدة الرئيسي)',
+                  prefixIcon: Icon(Icons.warehouse_outlined, size: 20),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: codeController,
+                decoration: const InputDecoration(
+                  labelText: 'رمز المستودع (مثال: BRD-WH أو QAS-01)',
+                  prefixIcon: Icon(Icons.qr_code_rounded, size: 20),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(
+                  labelText: 'المدينة / العنوان (مثال: القصيم - بريدة)',
+                  prefixIcon: Icon(Icons.location_on_outlined, size: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showCreateUserDialog(BuildContext context) {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
@@ -421,9 +506,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         children: [
                           Expanded(
                             child: EnterpriseButton.primary(
-                              label: 'إنشاء حساب موظف / اشتراك',
+                              label: 'إنشاء حساب موظف / مشرف',
                               icon: Icons.person_add_rounded,
                               onPressed: () => _showCreateUserDialog(context),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: EnterpriseButton.secondary(
+                              label: '+ إضافة مستودع جديد',
+                              icon: Icons.add_business_rounded,
+                              onPressed: () => _showCreateWarehouseDialog(context),
                             ),
                           ),
                         ],
@@ -442,12 +535,43 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: borderColor, width: 1),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSummaryStat('المستودعات النشطة', '${_warehouses.length} فروع', Icons.warehouse_rounded),
-                      _buildSummaryStat('إجمالي الموظفين', '${_users.length} موظف', Icons.people_outline_rounded),
-                      _buildSummaryStat('حالة النظام', 'مركزي 100%', Icons.cloud_done_rounded),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildSummaryStat('المستودعات النشطة', '${_warehouses.length} فروع', Icons.warehouse_rounded),
+                          _buildSummaryStat('إجمالي الموظفين', '${_users.length} موظف', Icons.people_outline_rounded),
+                          _buildSummaryStat('حالة النظام', 'مركزي 100%', Icons.cloud_done_rounded),
+                        ],
+                      ),
+                      if (_warehouses.isNotEmpty) ...[
+                        const Divider(height: 20),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _warehouses.map((wh) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.black26 : Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.location_city_rounded, size: 14, color: AppColors.primary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${wh.name} (${wh.code})',
+                                  style: AppTypography.smallLabel(),
+                                ),
+                              ],
+                            ),
+                          )).toList(),
+                        ),
+                      ],
                     ],
                   ),
                 ),

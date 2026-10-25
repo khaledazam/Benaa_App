@@ -9,6 +9,7 @@ import 'stock_audit_screen.dart';
 import 'local_stock_screen.dart';
 import 'sales_issuance_screen.dart';
 import 'sync_manager_screen.dart';
+import 'user_management_screen.dart';
 import '../widgets/enterprise/kpi_card.dart';
 import '../widgets/enterprise/stock_badge.dart';
 import '../widgets/enterprise/section_header.dart';
@@ -432,10 +433,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             },
           ),
+           IconButton(
+            icon: const Icon(Icons.manage_accounts_rounded, size: 22, color: AppColors.primary),
+            tooltip: 'إدارة وإنشاء حسابات الموظفين',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+              );
+            },
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded, size: 21),
             tooltip: 'خيارات المستودع',
             onSelected: (val) async {
+              if (val == 'manage_users') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+                );
+                return;
+              }
               final prov = Provider.of<InventoryProvider>(context, listen: false);
               if (val == 'seed_30') {
                 await prov.seedRealisticTestData();
@@ -460,6 +478,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               }
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'manage_users',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_add_rounded, size: 18, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Text('إدارة وإنشاء حسابات الموظفين'),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'seed_30',
                 child: Row(

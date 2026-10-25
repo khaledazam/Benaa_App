@@ -269,6 +269,27 @@ class MoreHubScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.person_add_rounded, size: 18),
+                    label: const Text('إدارة وإنشاء حسابات الموظفين (Super Admin)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
