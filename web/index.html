@@ -1,46 +1,222 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="منظومة إدارة المخزون الموحد ومراقبة الاشتراكات - بناء للديكور والمقاولات">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="منظومة إدارة المخزون والمستودعات المتعددة - شركة بناء للديكور والمقاولات">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="بناء المستودعات">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>نظام بناء لإدارة المستودعات</title>
+  <title>منظومة بناء لإدارة المخزون والمستودعات</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: #0B111E;
+      color: #F8FAFC;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    #benaa-splash-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 30%, #1E293B 0%, #0B111E 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+      padding: 20px;
+      text-align: center;
+    }
+    .splash-logo-container {
+      width: 88px;
+      height: 88px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, #10B981, #059669);
+      box-shadow: 0 12px 30px rgba(16, 185, 129, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+      animation: floatLogo 3s ease-in-out infinite;
+    }
+    .splash-logo-icon {
+      width: 48px;
+      height: 48px;
+      fill: #FFFFFF;
+    }
+    .splash-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+    .splash-subtitle {
+      font-size: 13.5px;
+      color: #94A3B8;
+      margin-bottom: 28px;
+      font-weight: 500;
+    }
+    .progress-bar-container {
+      width: 240px;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .progress-bar-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 45%;
+      background: linear-gradient(90deg, #10B981, #38BDF8);
+      border-radius: 999px;
+      animation: progressIndeterminate 1.8s ease-in-out infinite;
+    }
+    .splash-status-text {
+      font-size: 12.5px;
+      color: #64748B;
+      font-weight: 500;
+    }
+    .splash-actions {
+      margin-top: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 280px;
+    }
+    .apk-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34D399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .apk-btn:hover {
+      background: rgba(16, 185, 129, 0.25);
+    }
+    .reload-btn {
+      background: none;
+      border: none;
+      color: #64748B;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 4px;
+    }
+    .reload-btn:hover {
+      color: #94A3B8;
+    }
+    @keyframes floatLogo {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-8px); }
+    }
+    @keyframes progressIndeterminate {
+      0% { left: -45%; width: 30%; }
+      50% { left: 30%; width: 60%; }
+      100% { left: 100%; width: 40%; }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <!-- Instant Animated Splash Screen (Prevents Blank White Screen) -->
+  <div id="benaa-splash-loader">
+    <div class="splash-logo-container">
+      <svg class="splash-logo-icon" viewBox="0 0 24 24">
+        <path d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3zm0 2.84L18 11v7h-2v-6H8v6H6v-7l6-5.16z"/>
+      </svg>
+    </div>
+    <div class="splash-title">شركة بناء للديكور والمقاولات</div>
+    <div class="splash-subtitle">نظام إدارة المخزون والمستودعات المتعددة</div>
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill"></div>
+    </div>
+    <div class="splash-status-text" id="splash-status-text">جاري تشغيل المنظومة السحابية...</div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+    <div class="splash-actions">
+      <a href="/benaa-release.apk" class="apk-btn" download>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+        </svg>
+        تحميل تطبيق أندرويد APK (81MB)
+      </a>
+      <button class="reload-btn" onclick="forceHardReload()">تحديث الصفحة ومسح الذاكرة المؤقتة</button>
+    </div>
+  </div>
+
+  <script>
+    function forceHardReload() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let r of registrations) { r.unregister(); }
+        });
+      }
+      window.location.reload(true);
+    }
+
+    // Automatically dismiss splash loader once Flutter Web view mounts
+    function checkFlutterMounted() {
+      const fltView = document.querySelector('flutter-view') || document.querySelector('flt-glass-pane') || document.querySelector('flt-scene-host');
+      if (fltView) {
+        const loader = document.getElementById('benaa-splash-loader');
+        if (loader) {
+          loader.style.opacity = '0';
+          loader.style.visibility = 'hidden';
+          setTimeout(() => { if (loader.parentNode) loader.parentNode.removeChild(loader); }, 500);
+        }
+        return true;
+      }
+      return false;
+    }
+
+    const observer = new MutationObserver(() => {
+      if (checkFlutterMounted()) {
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Safety fallback timer if connection is slow
+    setTimeout(() => {
+      const statusText = document.getElementById('splash-status-text');
+      if (statusText) statusText.textContent = 'جاري مزامنة بيانات المستودعات...';
+    }, 4000);
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

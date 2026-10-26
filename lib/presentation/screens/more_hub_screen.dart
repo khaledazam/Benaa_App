@@ -13,6 +13,7 @@ import '../widgets/absher_hawsu_dialog.dart';
 import '../widgets/packaging_unit_converter_dialog.dart';
 import '../../core/services/biometric_auth_service.dart';
 import '../../core/services/cloud_auth_service.dart';
+import '../../core/services/app_update_service.dart';
 import '../../core/utils/download_helper.dart';
 import 'login_screen.dart';
 
@@ -417,6 +418,25 @@ class MoreHubScreen extends StatelessWidget {
                 );
               }
             },
+          ),
+          _buildListTile(
+            context,
+            title: 'التحقق من وجود تحديثات للمنظومة',
+            subtitle: 'الإصدار الحالي v${AppUpdateService.currentVersion} • ميزة الفحص والتحديث السحابي',
+            icon: Icons.system_update_rounded,
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+              ),
+              child: const Text(
+                'فحص السحابة',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+              ),
+            ),
+            onTap: () => AppUpdateService.checkForUpdateManual(context),
           ),
 
           _buildSectionHeader(context, 'حول النظام'),
