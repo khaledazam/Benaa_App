@@ -3,6 +3,14 @@
   "cleanUrls": true,
   "routes": [
     {
+      "src": "/landing",
+      "dest": "/landing.html"
+    },
+    {
+      "src": "/download",
+      "dest": "/landing.html"
+    },
+    {
       "src": "/benaa-release.apk",
       "headers": {
         "Content-Disposition": "attachment; filename=\"benaa-release.apk\"",
