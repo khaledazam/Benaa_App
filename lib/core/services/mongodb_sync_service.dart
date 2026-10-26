@@ -6,13 +6,10 @@ import '../../data/models/item_model.dart';
 
 /// Central MongoDB Atlas Database & Synchronization Service for Benaa Mobile
 class MongoDbSyncService {
-  // Configured MongoDB Atlas Database URI provided by user
-  static const String defaultDatabaseUrl =
-      'mongodb+srv://khaled141ma_db_user:j0qkLgf5jVC2rMkf@cluster0.kp7wfjx.mongodb.net/buildstock_db?retryWrites=true&w=majority&connectTimeoutMS=30000&socketTimeoutMS=30000';
-
-  static const String databaseName = 'buildstock_db';
-  static const String clusterHost = 'cluster0.kp7wfjx.mongodb.net';
-  static const String databaseUser = 'khaled141ma_db_user';
+  // Database credentials belong exclusively on the backend.
+  static const String databaseName = 'server-managed';
+  static const String clusterHost = 'server-managed';
+  static const String databaseUser = 'server-managed';
 
   static const String _spApiEndpointKey = 'benaa_mongodb_api_endpoint';
   static const String _spLastSyncKey = 'benaa_last_mongodb_sync_time';
@@ -20,8 +17,7 @@ class MongoDbSyncService {
   static String _apiBase = 'http://localhost:3000/api/mobile-sync';
 
   static String get apiBase => _apiBase;
-  static String get maskedConnectionUrl =>
-      'mongodb+srv://khaled141ma_db_user:••••••••••••@cluster0.kp7wfjx.mongodb.net/buildstock_db';
+  static String get maskedConnectionUrl => 'Managed securely by the backend';
 
   /// Initialize and load saved API endpoint if custom
   static Future<void> initialize() async {

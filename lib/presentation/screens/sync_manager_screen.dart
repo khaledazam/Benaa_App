@@ -173,13 +173,9 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 8,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 38,
+                        Wrap(children: [Container(width: 38,
                               height: 38,
                               decoration: BoxDecoration(
                                 color: AppColors.success.withOpacity(0.12),
@@ -453,33 +449,13 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
   }
 
   Widget _buildConfigRow(String label, String value, IconData icon, bool isDark, {bool isMonospace = false}) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: AppTypography.smallLabel(
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.left,
-            style: AppTypography.body(
-              color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-            ).copyWith(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              fontFamily: isMonospace ? 'monospace' : null,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, size: 16),
+      title: Text(label, style: AppTypography.smallLabel()),
+      subtitle: Text(value, textDirection: TextDirection.ltr,
+        style: AppTypography.body().copyWith(fontSize: 12.5,
+          fontFamily: isMonospace ? 'monospace' : null)),
     );
   }
 }

@@ -280,12 +280,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(
+                              Expanded(child: Text(
                                 'تسجيل الدخول الموحد للموظفين',
                                 style: AppTypography.cardTitle(
                                   color: isDark ? const Color(0xFFF8FAFC) : AppColors.textPrimary,
                                 ),
-                              ),
+                              )),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -490,12 +490,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 children: [
                                   const Icon(Icons.android_rounded, size: 20, color: Color(0xFF10B981)),
                                   const SizedBox(width: 6),
-                                  Text(
+                                  Flexible(child: Text(
                                     'تحميل APK للأندرويد',
                                     style: AppTypography.caption(
                                       color: isDark ? Colors.white : AppColors.textPrimary,
                                     ).copyWith(fontWeight: FontWeight.bold),
-                                  ),
+                                  )),
                                 ],
                               ),
                             ),
@@ -513,12 +513,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 children: [
                                   const Icon(Icons.install_mobile_rounded, size: 19, color: AppColors.primary),
                                   const SizedBox(width: 6),
-                                  Text(
+                                  Flexible(child: Text(
                                     'تثبيت كتطبيق (PWA)',
                                     style: AppTypography.caption(
                                       color: isDark ? Colors.white : AppColors.textPrimary,
                                     ).copyWith(fontWeight: FontWeight.bold),
-                                  ),
+                                  )),
                                 ],
                               ),
                             ),

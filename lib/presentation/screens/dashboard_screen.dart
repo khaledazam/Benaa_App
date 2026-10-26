@@ -94,10 +94,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
                   children: [
-                    Flexible(
-                      child: Text(
+                    Text(
                         'مستودع مواد البناء والديكور الرئيسي',
                         style: AppTypography.cardTitle(
                           color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
@@ -105,7 +104,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
@@ -618,12 +616,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   child: Column(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 8,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.speed_rounded, size: 18, color: AppColors.primary),
+                          Wrap(children: [ const Icon(Icons.speed_rounded, size: 18, color: AppColors.primary),
                               const SizedBox(width: 6),
                               Text(
                                 'معدل توفر الأصناف بالمستودع',
@@ -747,8 +742,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: borderColor, width: 1),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  child: Wrap(alignment: WrapAlignment.spaceAround, spacing: 8, runSpacing: 8,
                     children: [
                       _buildInlineTool(
                         context,

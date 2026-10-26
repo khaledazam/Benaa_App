@@ -538,8 +538,10 @@ class _LocalStockScreenState extends State<LocalStockScreen> {
                     ),
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     Row(
                       children: [

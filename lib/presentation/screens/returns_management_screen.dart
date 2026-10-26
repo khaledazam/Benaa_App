@@ -97,9 +97,7 @@ class _ReturnsManagementScreenState extends State<ReturnsManagementScreen> {
                         onChanged: (val) => setState(() => _searchQuery = val.trim()),
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _buildFilterChip('الجميع'),
+                      Wrap(spacing: 6, runSpacing: 6, children: [_buildFilterChip('الجميع'),
                           const SizedBox(width: 6),
                           _buildFilterChip('مبيعات'),
                           const SizedBox(width: 6),

@@ -272,6 +272,7 @@ class CloudAuthService {
     );
 
     // Call Cloud Backend
+    bool cloudSucceeded = false;
     for (final base in _apiBases) {
       try {
         final res = await http.post(
@@ -286,10 +287,13 @@ class CloudAuthService {
         ).timeout(const Duration(seconds: 5));
 
         if (res.statusCode == 201 || res.statusCode == 200) {
+          cloudSucceeded = true;
           break;
         }
       } catch (_) {}
     }
+
+    if (!cloudSucceeded) return false;
 
     _cachedWarehouses.add(newWh);
     final sp = await SharedPreferences.getInstance();
@@ -357,6 +361,7 @@ class CloudAuthService {
       createdAt: DateTime.now().toIso8601String().split('T').first,
     );
 
+    bool cloudSucceeded = false;
     for (final base in _apiBases) {
       try {
         final res = await http.post(
@@ -377,10 +382,13 @@ class CloudAuthService {
         ).timeout(const Duration(seconds: 5));
 
         if (res.statusCode == 201 || res.statusCode == 200) {
+          cloudSucceeded = true;
           break;
         }
       } catch (_) {}
     }
+
+    if (!cloudSucceeded) return false;
 
     _cachedUsers.insert(0, newUser);
     await _saveCachedUsers();
@@ -399,6 +407,7 @@ class CloudAuthService {
     );
 
     // Call Cloud Backend
+    bool cloudSucceeded = false;
     for (final base in _apiBases) {
       try {
         final res = await http.put(
@@ -411,9 +420,14 @@ class CloudAuthService {
           }),
         ).timeout(const Duration(seconds: 5));
 
-        if (res.statusCode == 200) break;
+        if (res.statusCode == 200) {
+          cloudSucceeded = true;
+          break;
+        }
       } catch (_) {}
     }
+
+    if (!cloudSucceeded) return false;
 
     // Update local state
     final idx = _cachedUsers.indexWhere((u) => u.id == employeeId);
@@ -461,40 +475,6 @@ class CloudAuthService {
 
     if (cleanId.isEmpty || cleanPass.isEmpty) {
       return {'success': false, 'message': 'يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور'};
-    }
-
-    // Super Admin Verification (Instant zero-delay authentication on web & offline)
-    final isKhaled = cleanId.toLowerCase() == 'khaled@admin.com' ||
-        cleanId.toLowerCase() == 'khaled' ||
-        cleanId.toLowerCase().startsWith('khaled');
-    final isKhaledPass = cleanPass == '102003000@' ||
-        cleanPass == '102003000' ||
-        cleanPass == 'admin123' ||
-        cleanPass == 'admin' ||
-        cleanPass.length >= 4;
-
-    if (isKhaled && isKhaledPass) {
-      final superAdminUser = CompanyUser(
-        id: 'USR-SUPERADMIN-KHALED',
-        name: 'م. خالد - السوبر أدمن',
-        email: 'khaled@admin.com',
-        username: 'khaled',
-        role: 'SUPER_ADMIN',
-        isActive: true,
-        isSubscriptionActive: true,
-        subscriptionStartDate: '2026-01-01',
-        subscriptionEndDate: '2030-12-31',
-        primaryWarehouseId: 'WH-MAIN-RIYADH',
-        primaryWarehouseName: 'المستودع المركزي - بناء للديكور',
-        primaryWarehouseCode: 'MAIN-WH',
-        warehouseIds: ['WH-MAIN-RIYADH', 'WH-DECOR-JEDDAH', 'WH-BACKUP-DAMMAM'],
-        permissions: ['all', 'admin:all', 'inventory:all', 'transfers:all', 'ai:all'],
-        createdAt: '2026-01-01',
-      );
-      _currentUser = superAdminUser;
-      final sp = await SharedPreferences.getInstance();
-      await sp.setString(_spUserKey, jsonEncode(superAdminUser.toJson()));
-      return {'success': true, 'user': superAdminUser};
     }
 
     // Try cloud backend
@@ -551,51 +531,6 @@ class CloudAuthService {
           };
         }
       } catch (_) {}
-    }
-
-    // Super Admin Verification (Guaranteed offline / cloud fallback)
-    if ((cleanId.toLowerCase() == 'khaled@admin.com' || cleanId.toLowerCase() == 'khaled') &&
-        cleanPass == '102003000@') {
-      final superAdminUser = CompanyUser(
-        id: 'USR-SUPERADMIN-KHALED',
-        name: 'م. خالد - السوبر أدمن',
-        email: 'khaled@admin.com',
-        username: 'khaled',
-        role: 'SUPER_ADMIN',
-        isActive: true,
-        isSubscriptionActive: true,
-        subscriptionStartDate: '2026-01-01',
-        subscriptionEndDate: '2030-12-31',
-        primaryWarehouseId: 'WH-MAIN-RIYADH',
-        primaryWarehouseName: 'المستودع المركزي - بناء للديكور',
-        primaryWarehouseCode: 'MAIN-WH',
-        warehouseIds: ['WH-MAIN-RIYADH', 'WH-DECOR-JEDDAH', 'WH-BACKUP-DAMMAM'],
-        permissions: ['all', 'admin:all', 'inventory:all', 'transfers:all', 'ai:all'],
-        createdAt: '2026-01-01',
-      );
-      _currentUser = superAdminUser;
-      final sp = await SharedPreferences.getInstance();
-      await sp.setString(_spUserKey, jsonEncode(superAdminUser.toJson()));
-      return {'success': true, 'user': superAdminUser};
-    }
-
-    // Offline / Demo Fallback Check
-    final matchedUser = _cachedUsers.firstWhere(
-      (u) => (u.email.toLowerCase() == cleanId.toLowerCase() || u.username.toLowerCase() == cleanId.toLowerCase()),
-      orElse: () => CompanyUser(id: '', name: '', email: '', username: '', role: '', createdAt: ''),
-    );
-
-    if (matchedUser.id.isNotEmpty) {
-      if (!matchedUser.isActive) {
-        return {'success': false, 'message': 'تم تعطيل هذا الحساب من قِبل المدير العام'};
-      }
-      if (!matchedUser.isSubscriptionActive) {
-        return {'success': false, 'message': 'انتهت فترة اشتراك هذا الحساب'};
-      }
-      _currentUser = matchedUser;
-      final sp = await SharedPreferences.getInstance();
-      await sp.setString(_spUserKey, jsonEncode(matchedUser.toJson()));
-      return {'success': true, 'user': matchedUser, 'offline': true};
     }
 
     return {

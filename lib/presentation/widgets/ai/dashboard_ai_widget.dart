@@ -68,13 +68,9 @@ class DashboardAiWidget extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Header Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 8,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 32,
+                        Wrap(children: [Container(width: 32,
                               height: 32,
                               decoration: BoxDecoration(
                                 color: AppColors.primary.withOpacity(0.1),
@@ -96,10 +92,7 @@ class DashboardAiWidget extends StatelessWidget {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'ذكاء بناء | Benaa Intelligence',
+                                Wrap(children: [Text('ذكاء بناء | Benaa Intelligence',
                                       style: AppTypography.cardTitle(
                                         color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
                                       ).copyWith(fontWeight: FontWeight.w700, fontSize: 14),
@@ -215,8 +208,7 @@ class DashboardAiWidget extends StatelessWidget {
                     const SizedBox(height: 10),
 
                     // Actions Footer
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 8,
                       children: [
                         TextButton.icon(
                           onPressed: () {

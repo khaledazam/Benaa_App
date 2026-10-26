@@ -106,9 +106,13 @@ class StockBadge extends StatelessWidget {
             Icon(icon, size: 12, color: textColor),
             const SizedBox(width: 4),
           ],
-          Text(
-            label,
-            style: AppTypography.smallLabel(color: textColor),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.smallLabel(color: textColor),
+            ),
           ),
         ],
       ),

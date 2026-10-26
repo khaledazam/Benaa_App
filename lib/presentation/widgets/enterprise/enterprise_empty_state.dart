@@ -25,7 +25,7 @@ class EnterpriseEmptyState extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -69,7 +69,7 @@ class EnterpriseEmptyState extends StatelessWidget {
             ],
           ],
         ),
-      ),
+      )),
     );
   }
 }

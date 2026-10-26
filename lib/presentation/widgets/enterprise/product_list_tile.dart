@@ -121,7 +121,7 @@ class ProductListTile extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              statusBadge,
+                              Flexible(child: statusBadge),
                             ],
                           ),
                           const SizedBox(height: 6),

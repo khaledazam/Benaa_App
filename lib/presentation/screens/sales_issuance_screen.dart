@@ -404,8 +404,7 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 8,
                       children: [
                         Text('إضافة أصناف للسلة', style: AppTypography.sectionHeading()),
                         Row(

@@ -137,9 +137,14 @@ class EnterpriseButton extends StatelessWidget {
           Icon(icon, size: 18, color: fg),
           const SizedBox(width: 8),
         ],
-        Text(
-          label,
-          style: AppTypography.bodyBold(color: fg),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyBold(color: fg),
+          ),
         ),
       ],
     );

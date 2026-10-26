@@ -193,6 +193,7 @@ class _TransfersListScreenState extends State<TransfersListScreen> with SingleTi
       appBar: AppBar(
         title: const Text('شحنات البضائع بين المستودعات'),
         bottom: TabBar(
+          isScrollable: true,
           controller: _tabController,
           tabs: [
             Tab(
