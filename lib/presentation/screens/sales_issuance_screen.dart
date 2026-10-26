@@ -258,7 +258,7 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
             ),
             const SizedBox(height: 8),
             EnterpriseButton.secondary(
-              label: 'مشاركة إذن تسليم بضاعة (WhatsApp)',
+              label: 'إرسال إشعار تسليم بضاعة للعميل (واتساب)',
               icon: Icons.share_rounded,
               onPressed: () async {
                 final pdfBytes = await PdfReportService.generateGoodsDeliveryVoucherPdf(
@@ -317,7 +317,7 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إذن صرف ومبيعات للمحلات'),
+        title: const Text('تسليم بضاعة وفواتير بيع (صرف لعميل)'),
         actions: [
           IconButton(
             icon: const Icon(Icons.calculate_outlined, size: 20),

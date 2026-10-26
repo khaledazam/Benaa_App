@@ -85,16 +85,16 @@ class OperationsHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('العمليات المخزنية والتجارية'),
+        title: const Text('العمليات وحركة البضائع'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _buildOperationTile(
             context,
-            title: 'سندات التحويل والشحنات',
-            subtitle: 'إنشاء ومتابعة تحويل المواد بين المستودعات والمشاريع',
-            icon: Icons.local_shipping_outlined,
+            title: 'استلام وإرسال الشحنات بين الفروع',
+            subtitle: 'متابعة البضاعة الواردة للمستودع وتأكيد استلامها أو إرسال مواد لفرع آخر',
+            icon: Icons.local_shipping_rounded,
             accentColor: AppColors.primary,
             onTap: () {
               Navigator.push(
@@ -105,9 +105,9 @@ class OperationsHubScreen extends StatelessWidget {
           ),
           _buildOperationTile(
             context,
-            title: 'جرد وتدقيق المخزون',
-            subtitle: 'مطابقة الأرصدة الفعلية على الأرفف واكتشاف الفروقات',
-            icon: Icons.fact_check_outlined,
+            title: 'جرد البضاعة الفعلي بالباركود',
+            subtitle: 'مطابقة الكميات الحقيقية على الأرفف واكتشاف وتعديل أي عجز أو زيادة',
+            icon: Icons.qr_code_scanner_rounded,
             accentColor: AppColors.warning,
             onTap: () {
               Navigator.push(
@@ -118,9 +118,9 @@ class OperationsHubScreen extends StatelessWidget {
           ),
           _buildOperationTile(
             context,
-            title: 'صرف المبيعات والعملاء',
-            subtitle: 'إصدار فواتير بيع، متابعة مديونيات العملاء والتحصيل',
-            icon: Icons.point_of_sale_outlined,
+            title: 'صرف بضاعة وفواتير بيع',
+            subtitle: 'تسليم المواد للعملاء والمقاولين وخصمها فوراً من رصيد المستودع',
+            icon: Icons.outbox_rounded,
             accentColor: AppColors.success,
             onTap: () {
               Navigator.push(
@@ -131,9 +131,9 @@ class OperationsHubScreen extends StatelessWidget {
           ),
           _buildOperationTile(
             context,
-            title: 'إدارة المرتجعات',
-            subtitle: 'فحص واستلام البضائع المعادة وإعادة إدخالها للمستودع',
-            icon: Icons.assignment_return_outlined,
+            title: 'استلام بضاعة مرتجعة من عميل',
+            subtitle: 'فحص المواد المعادة من العميل وإرجاعها لحساب المستودع',
+            icon: Icons.assignment_return_rounded,
             accentColor: AppColors.error,
             onTap: () {
               Navigator.push(

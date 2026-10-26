@@ -100,7 +100,7 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الجرد الفعلي للأرصدة (عند الطلب)'),
+        title: const Text('جرد البضاعة الفعلي بالباركود'),
       ),
       body: Consumer<InventoryProvider>(
         builder: (context, provider, child) {
@@ -136,7 +136,7 @@ class _StockAuditScreenState extends State<StockAuditScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'تسجيل جرد فعلي لصنف',
+                      'عد ومطابقة كمية صنف على الرف',
                       style: AppTypography.sectionHeading(),
                     ),
                     const SizedBox(height: 12),

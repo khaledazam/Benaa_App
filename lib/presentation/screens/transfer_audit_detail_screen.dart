@@ -256,7 +256,7 @@ class _TransferAuditDetailScreenState extends State<TransferAuditDetailScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text('تدقيق سند #${transfer.transferNumber}'),
+            title: Text('فحص واستلام شحنة #${transfer.transferNumber}'),
             actions: [
               IconButton(
                 icon: const Icon(Icons.share_outlined, size: 20),
@@ -615,8 +615,8 @@ class _TransferAuditDetailScreenState extends State<TransferAuditDetailScreen> {
                         height: 46,
                         isLoading: _isSubmitting,
                         label: transfer.status.startsWith('audited')
-                            ? 'إعادة تأكيد ومطابقة السند'
-                            : 'تأكيد الجرد وإدخال البضاعة للمستودع',
+                            ? 'إعادة تأكيد استلام الشحنة'
+                            : 'تأكيد استلام البضاعة وإضافتها للرصيد فوراً',
                         icon: Icons.check_circle_outline,
                         onPressed: () async {
                           setState(() => _isSubmitting = true);
@@ -639,8 +639,8 @@ class _TransferAuditDetailScreenState extends State<TransferAuditDetailScreen> {
                                   backgroundColor: hasDiscrepancies ? AppColors.warning : AppColors.success,
                                   content: Text(
                                     hasDiscrepancies
-                                        ? 'تم توثيق الجرد مع وجود $discrepancyCount فروقات عجز/زيادة'
-                                        : 'تم إدخال كافة بضاعة الشحنة للمستودع بنجاح وتحديث الأرصدة!',
+                                        ? 'تم توثيق الاستلام مع وجود $discrepancyCount فروقات عجز/زيادة'
+                                        : 'تم استلام كافة بضاعة الشحنة وإضافتها لرصيد المستودع بنجاح!',
                                   ),
                                 ),
                               );

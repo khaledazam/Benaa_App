@@ -191,7 +191,7 @@ class _TransfersListScreenState extends State<TransfersListScreen> with SingleTi
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('دورة التحويلات المخزنية بين الفروع'),
+        title: const Text('شحنات البضائع بين المستودعات'),
         bottom: TabBar(
           controller: _tabController,
           tabs: [
@@ -201,7 +201,7 @@ class _TransfersListScreenState extends State<TransfersListScreen> with SingleTi
                 children: [
                   const Icon(Icons.sync_alt_rounded, size: 18),
                   const SizedBox(width: 6),
-                  Text('دورة التحويل الحية (${_lifecycleTransfers.length})'),
+                  Text('الشحنات النشطة (${_lifecycleTransfers.length})'),
                 ],
               ),
             ),
@@ -209,9 +209,9 @@ class _TransfersListScreenState extends State<TransfersListScreen> with SingleTi
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.receipt_long_rounded, size: 18),
+                  Icon(Icons.history_rounded, size: 18),
                   SizedBox(width: 6),
-                  Text('سندات الشحنات الأرشيفية'),
+                  Text('سجل الشحنات السابقة'),
                 ],
               ),
             ),

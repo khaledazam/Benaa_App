@@ -45,11 +45,11 @@ class _ReturnsManagementScreenState extends State<ReturnsManagementScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إدارة فواتير المرتجعات'),
+        title: const Text('استلام بضاعة مرتجعة من عميل'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_rounded, size: 22),
-            tooltip: 'إنشاء فاتورة مرتجع جديدة',
+            tooltip: 'تسجيل بضاعة مرتجعة جديدة',
             onPressed: () {
               showDialog(
                 context: context,

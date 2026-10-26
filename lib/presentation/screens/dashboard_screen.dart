@@ -542,7 +542,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Expanded(
                       child: KpiCard(
-                        title: 'إجمالي الأصناف',
+                        title: 'أصناف المستودع',
                         value: '$localItemsCount صنف',
                         badgeText: localItemsCount > 0 ? 'محدّث تلقائياً' : null,
                         icon: Icons.inventory_2_outlined,
@@ -558,9 +558,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: KpiCard(
-                        title: 'شحنات قادمة',
-                        value: '$pendingCount سند',
-                        badgeText: pendingCount > 0 ? 'تحتاج تدقيق' : 'مكتملة',
+                        title: 'بضائع في الطريق',
+                        value: '$pendingCount شحنة',
+                        badgeText: pendingCount > 0 ? 'بانتظار الاستلام' : 'تم استلام الكل',
                         icon: Icons.local_shipping_outlined,
                         accentColor: AppColors.warning,
                         onTap: () {
@@ -578,9 +578,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Expanded(
                       child: KpiCard(
-                        title: 'قيمة المخزون',
+                        title: 'القيمة الإجمالية للبضاعة',
                         value: '${totalValuation.toStringAsFixed(0)} ر.س',
-                        badgeText: 'رصيد مالي',
+                        badgeText: 'رصيد المستودع',
                         icon: Icons.account_balance_wallet_outlined,
                         accentColor: AppColors.success,
                       ),
@@ -588,9 +588,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: KpiCard(
-                        title: 'وشيك النفاذ',
+                        title: 'أصناف قاربت على الانتهاء',
                         value: '$lowStockCount صنف',
-                        badgeText: lowStockCount > 0 ? 'تحت حد الأمان' : 'آمن',
+                        badgeText: lowStockCount > 0 ? 'تحتاج طلب وشراء' : 'المخزون آمن',
                         icon: Icons.warning_amber_rounded,
                         accentColor: AppColors.error,
                         onTap: () {
@@ -666,13 +666,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 18),
 
                 // 4. Prioritized Primary Operational Actions
-                const SectionHeader(title: 'العمليات التشغيلية الأساسية'),
+                const SectionHeader(title: 'ماذا تريد أن تفعل اليوم؟ (العمليات السريعة)'),
                 _buildPrimaryActionCard(
                   context,
-                  title: 'استلام وتدقيق شحنة واردة',
-                  subtitle: 'فحص الشحنات الواردة ومطابقة الكميات والباركود',
-                  badgeText: 'أولوية تشغيلية',
-                  icon: Icons.assignment_turned_in_rounded,
+                  title: 'استلام بضاعة جديدة دخلت المستودع',
+                  subtitle: 'فحص ومطابقة الكميات التي وصلت وإضافتها لرصيد المستودع فوراً',
+                  badgeText: 'بضاعة واردة',
+                  icon: Icons.move_to_inbox_rounded,
                   color: AppColors.primary,
                   onTap: () {
                     Navigator.push(
@@ -684,10 +684,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 10),
                 _buildPrimaryActionCard(
                   context,
-                  title: 'إذن صرف ومبيعات',
-                  subtitle: 'إصدار أذون صرف وتسليم بضاعة للعملاء والمشاريع',
-                  badgeText: 'تسليم فوري',
-                  icon: Icons.point_of_sale_rounded,
+                  title: 'صرف بضاعة وخروجها (بيع / تسليم)',
+                  subtitle: 'تسليم مواد لعميل أو مشروع وخصمها فوراً من رصيد المستودع',
+                  badgeText: 'تسليم لعميل',
+                  icon: Icons.outbox_rounded,
                   color: AppColors.success,
                   onTap: () {
                     Navigator.push(
@@ -703,8 +703,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     _buildSecondaryActionCard(
                       context,
-                      label: 'تحويل مخزون',
-                      icon: Icons.swap_horiz_rounded,
+                      label: 'نقل بضاعة لفرع آخر',
+                      icon: Icons.local_shipping_rounded,
                       color: AppColors.primary,
                       onTap: () async {
                         final transferId = await showDialog<String>(
@@ -724,8 +724,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 10),
                     _buildSecondaryActionCard(
                       context,
-                      label: 'جرد فعلي ومطابقة',
-                      icon: Icons.fact_check_outlined,
+                      label: 'جرد البضاعة بالباركود',
+                      icon: Icons.qr_code_scanner_rounded,
                       color: AppColors.warning,
                       onTap: () {
                         Navigator.push(
