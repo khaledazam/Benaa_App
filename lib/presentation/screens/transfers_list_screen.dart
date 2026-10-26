@@ -113,8 +113,10 @@ class _TransfersListScreenState extends State<TransfersListScreen> with SingleTi
                   : (isPartial ? 'استلام جزئي: $recQty من أصل ${transfer.requestedQuantity}' : null),
             );
 
-            await HapticsService.actionSuccess();
-            if (ctx.mounted) Navigator.pop(ctx, true);
+            if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(apiRes['message'].toString())));
+            if (apiRes['success'] != true && apiRes['queued'] != true) return;
+            if (apiRes['success'] == true) await HapticsService.actionSuccess();
+            if (ctx.mounted) Navigator.pop(ctx, apiRes['success'] == true);
           },
           content: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -171,12 +173,12 @@ class _TransfersListScreenState extends State<TransfersListScreen> with SingleTi
       action: action,
     );
 
-    await HapticsService.actionSuccess();
+    if (res['success'] == true) await HapticsService.actionSuccess();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.success,
-          content: Text('تم تحديث حالة التحويل إلى ($action) بنجاح!'),
+          content: Text(res['message']?.toString() ?? 'تعذر اعتماد العملية'),
         ),
       );
       _loadLifecycleTransfers();

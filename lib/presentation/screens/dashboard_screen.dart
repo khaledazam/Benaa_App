@@ -1,3 +1,4 @@
+import 'projects_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -680,7 +681,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _buildPrimaryActionCard(
                   context,
                   title: 'صرف بضاعة وخروجها (بيع / تسليم)',
-                  subtitle: 'تسليم مواد لعميل أو مشروع وخصمها فوراً من رصيد المستودع',
+                  subtitle: 'تسليم مواد للعميل بفواتير المبيعات',
                   badgeText: 'تسليم لعميل',
                   icon: Icons.outbox_rounded,
                   color: AppColors.success,
@@ -744,6 +745,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   child: Wrap(alignment: WrapAlignment.spaceAround, spacing: 8, runSpacing: 8,
                     children: [
+                      _buildInlineTool(context, label: 'المشاريع وصرف المواد', icon: Icons.construction,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen()))),
                       _buildInlineTool(
                         context,
                         label: 'طباعة الباركود',

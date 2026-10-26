@@ -178,11 +178,36 @@
     </div>
   </div>
 
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <script>
+    // Auto-bust stale service workers from old landing pages or releases
+    const BUILD_HASH = 'benaa-v1.0.4-b5';
+    if (localStorage.getItem('benaa_cache_id') !== BUILD_HASH) {
+      localStorage.setItem('benaa_cache_id', BUILD_HASH);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          for (let r of regs) { r.unregister(); }
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (let n of names) caches.delete(n);
+        });
+      }
+    }
+
     function forceHardReload() {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
           for(let r of registrations) { r.unregister(); }
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (let n of names) caches.delete(n);
         });
       }
       window.location.reload(true);

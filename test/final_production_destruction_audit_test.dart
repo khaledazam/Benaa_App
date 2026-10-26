@@ -61,16 +61,17 @@ void main() {
         db.createSaleOrder('sale-c1', 'INV-C1', 'عميل 1', 15400.0, [
           {'item_code': 'MARBLE-ROYAL', 'item_name': 'رخام روزا برتغالي نخب أول', 'qty': 70.0, 'unit_price': 220.0, 'total': 15400.0}
         ]),
-        db.createSaleOrder('sale-c2', 'INV-C2', 'عميل 2', 11000.0, [
+        expectLater(db.createSaleOrder('sale-c2', 'INV-C2', 'عميل 2', 11000.0, [
           {'item_code': 'MARBLE-ROYAL', 'item_name': 'رخام روزا برتغالي نخب أول', 'qty': 50.0, 'unit_price': 220.0, 'total': 11000.0}
-        ]),
+        ]), throwsStateError),
       ]);
 
       final items = await db.getLocalItems();
       final marble = items.firstWhere((i) => i.code == 'MARBLE-ROYAL');
 
       // Clamped at >= 0 (no negative stock corruption)
-      expect(marble.currentStock >= 0.0, true);
+      expect(marble.currentStock, 30.0);
+      expect(await db.getSalesForCustomer('عميل 2'), isEmpty);
     });
 
     test('DESTRUCTION-03: 20x Continuous Transaction & App Restart Cycles', () async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/services/local_scope_service.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../core/database/db_helper.dart';
 import '../../data/models/item_model.dart';
@@ -10,6 +11,13 @@ import '../../core/services/unit_conversion_engine.dart';
 
 class InventoryProvider extends ChangeNotifier {
   final DBHelper _dbHelper = DBHelper();
+  String _scope = LocalScopeService.key;
+  void _ensureScope() {
+    if (_scope == LocalScopeService.key) return;
+    _scope = LocalScopeService.key;
+    _transfers = []; _selectedTransfer = null; _localItems = [];
+    _returns = []; _auditLogs = []; _searchQuery = '';
+  }
 
   List<TransferModel> _transfers = [];
   TransferModel? _selectedTransfer;
@@ -20,11 +28,11 @@ class InventoryProvider extends ChangeNotifier {
   String _searchQuery = '';
 
   DBHelper get dbHelper => _dbHelper;
-  List<TransferModel> get transfers => _transfers;
-  TransferModel? get selectedTransfer => _selectedTransfer;
-  List<ItemModel> get localItems => _localItems;
-  List<ReturnInvoiceModel> get returns => _returns;
-  List<Map<String, dynamic>> get auditLogs => _auditLogs;
+  List<TransferModel> get transfers { _ensureScope(); return _transfers; }
+  TransferModel? get selectedTransfer { _ensureScope(); return _selectedTransfer; }
+  List<ItemModel> get localItems { _ensureScope(); return _localItems; }
+  List<ReturnInvoiceModel> get returns { _ensureScope(); return _returns; }
+  List<Map<String, dynamic>> get auditLogs { _ensureScope(); return _auditLogs; }
   bool get isLoading => _isLoading;
   String get searchQuery => _searchQuery;
 
@@ -41,6 +49,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> loadTransfers() async {
+    _ensureScope();
     _isLoading = true;
     notifyListeners();
 
@@ -54,6 +63,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> selectTransfer(String id) async {
+    _ensureScope();
     _isLoading = true;
     notifyListeners();
 
@@ -74,6 +84,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> updateItemQuantity(int itemId, double newActualQty, {String? notes, String? imagePath}) async {
+    _ensureScope();
     if (_selectedTransfer == null) return;
 
     final index = _selectedTransfer!.items.indexWhere((item) => item.id == itemId);
@@ -92,6 +103,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> confirmSelectedTransferAudit() async {
+    _ensureScope();
     if (_selectedTransfer == null) return;
 
     bool hasDiscrepancy = _selectedTransfer!.items.any((item) => item.hasDiscrepancy);
@@ -105,6 +117,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> loadLocalItems() async {
+    _ensureScope();
     _localItems = await _dbHelper.getLocalItems();
     notifyListeners();
   }
@@ -118,6 +131,7 @@ class InventoryProvider extends ChangeNotifier {
     double defaultPrice = 25.0,
     String location = 'ممر A - رف 1 - كابينة 1',
   }) async {
+    _ensureScope();
     await _dbHelper.registerOrUpdateLocalItem(
       code: barcode,
       name: itemName,
@@ -148,11 +162,13 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> loadAuditLogs() async {
+    _ensureScope();
     _auditLogs = await _dbHelper.getAuditLogs();
     notifyListeners();
   }
 
   Future<void> recordPeriodicAudit(String itemCode, String itemName, double systemQty, double countedQty, String? notes) async {
+    _ensureScope();
     await _dbHelper.recordLocalStockAudit(itemCode, itemName, systemQty, countedQty, notes);
     await loadAuditLogs();
     await loadLocalItems();
@@ -166,6 +182,7 @@ class InventoryProvider extends ChangeNotifier {
     required String notes,
     required List<Map<String, dynamic>> items,
   }) async {
+    _ensureScope();
     final transferId = await _dbHelper.createNewCustomTransfer(
       transferNumber: transferNumber,
       fromWarehouse: fromWarehouse,
@@ -180,11 +197,13 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> adjustItemStockDirectly(String itemCode, double newStock, String reasonNote) async {
+    _ensureScope();
     await _dbHelper.updateItemStockDirectly(itemCode, newStock, reasonNote);
     await loadLocalItems();
   }
 
   Future<void> addItem(ItemModel item) async {
+    _ensureScope();
     final db = await _dbHelper.database;
     if (db != null) {
       await db.insert('items', item.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
@@ -193,15 +212,18 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> updateItemStock(String itemCode, double newStock) async {
+    _ensureScope();
     await adjustItemStockDirectly(itemCode, newStock, 'تحديث رصيد عبر المسح الضوئي الذكي (AI OCR)');
   }
 
   Future<void> deleteItem(String code) async {
+    _ensureScope();
     await _dbHelper.deleteItem(code);
     await loadLocalItems();
   }
 
   Future<bool> voidSaleInvoice(int saleId) async {
+    _ensureScope();
     final success = await _dbHelper.voidSaleInvoice(saleId);
     if (success) {
       await loadLocalItems();
@@ -211,6 +233,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<bool> voidCustomerPayment(int paymentId) async {
+    _ensureScope();
     final success = await _dbHelper.voidCustomerPayment(paymentId);
     if (success) {
       notifyListeners();
@@ -219,11 +242,13 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> deleteTransfer(String transferId) async {
+    _ensureScope();
     await _dbHelper.deleteTransfer(transferId);
     await loadTransfers();
   }
 
   Future<void> updateInvoiceNotes(String transferId, String newNotes) async {
+    _ensureScope();
     final db = await _dbHelper.database;
     if (db != null) {
       await db.update(
@@ -251,6 +276,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> updateItemLocation(String itemCode, String newLocation) async {
+    _ensureScope();
     final db = await _dbHelper.database;
     if (db != null) {
       await db.update(
@@ -264,6 +290,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> addOrUpdateProductUnit(ProductUnitModel unit) async {
+    _ensureScope();
     await _dbHelper.saveProductUnit(unit);
     await loadLocalItems();
   }
@@ -273,6 +300,7 @@ class InventoryProvider extends ChangeNotifier {
     required List<UnitQuantityInput> inputs,
     String? notes,
   }) async {
+    _ensureScope();
     final countedBaseQty = UnitConversionEngine.calculateHybridQuantity(item: item, inputs: inputs);
     await _dbHelper.recordLocalStockAudit(item.code, item.name, item.currentStock, countedBaseQty, notes);
 
@@ -289,6 +317,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> loadReturns() async {
+    _ensureScope();
     final rawReturns = await _dbHelper.getReturnInvoices();
     List<ReturnInvoiceModel> loaded = [];
     for (var r in rawReturns) {
@@ -307,6 +336,7 @@ class InventoryProvider extends ChangeNotifier {
     required String notes,
     required List<ReturnItemModel> items,
   }) async {
+    _ensureScope();
     final id = 'RET-${DateTime.now().millisecondsSinceEpoch}';
     final returnNumber = returnType == ReturnType.salesReturn
         ? 'RET-SALE-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}'
@@ -348,6 +378,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> clearAllDataAndReset() async {
+    _ensureScope();
     _isLoading = true;
     notifyListeners();
 
@@ -364,6 +395,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> seedRealisticTestData() async {
+    _ensureScope();
     _isLoading = true;
     notifyListeners();
 

@@ -210,6 +210,11 @@ class _SalesIssuanceScreenState extends State<SalesIssuanceScreen> {
           _customerPhoneController.clear();
         });
       }
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: AppColors.error,
+        content: Text('لم يتم ترحيل الفاتورة: ' + error.toString()),
+      ));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

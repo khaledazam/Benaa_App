@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'local_scope_service.dart';
+import 'cloud_auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -92,12 +94,19 @@ class BenaaAiService extends ChangeNotifier {
   static const String _spLastAnalysisKey = 'benaa_ai_last_analysis_time';
 
   List<BenaaAiInsight> _insights = [];
+  String _scope = LocalScopeService.key;
+  void _ensureScope() {
+    if (_scope == LocalScopeService.key) return;
+    _scope = LocalScopeService.key;
+    _insights = [];
+    _lastAnalysisTime = '';
+  }
   bool _isLoading = false;
   bool _isOffline = false;
   String _lastAnalysisTime = 'منذ قليل';
   String _providerName = 'NaraRouter (nemotron-3.5-lightning-free)';
 
-  List<BenaaAiInsight> get insights => _insights;
+  List<BenaaAiInsight> get insights { _ensureScope(); return _insights; }
   bool get isLoading => _isLoading;
   bool get isOffline => _isOffline;
   String get lastAnalysisTime => _lastAnalysisTime;
@@ -115,6 +124,8 @@ class BenaaAiService extends ChangeNotifier {
 
   /// Fetch insights from Next.js / NaraRouter backend with offline fallback
   Future<void> fetchInsights({bool forceRefresh = false, bool silent = false}) async {
+    _ensureScope();
+    final requestScope = LocalScopeService.key;
     if (!silent) {
       _isLoading = true;
       notifyListeners();
@@ -127,10 +138,10 @@ class BenaaAiService extends ChangeNotifier {
           final res = await (forceRefresh
               ? http.post(
                   Uri.parse(endpoint),
-                  headers: {'Content-Type': 'application/json'},
+                  headers: await CloudAuthService.authenticatedHeaders(),
                   body: jsonEncode({'action': 'analyze_now'}),
                 )
-              : http.get(Uri.parse(endpoint)))
+              : http.get(Uri.parse(endpoint), headers: await CloudAuthService.authenticatedHeaders()))
               .timeout(const Duration(seconds: 6));
           if (res.statusCode == 200) {
             response = res;
@@ -140,6 +151,7 @@ class BenaaAiService extends ChangeNotifier {
       }
 
       if (response != null && response.statusCode == 200) {
+        if (requestScope != LocalScopeService.key) return;
         final data = jsonDecode(response.body);
         final List<dynamic> list = data['insights'] ?? [];
         _insights = list.map((e) => BenaaAiInsight.fromJson(e)).toList();
@@ -172,7 +184,7 @@ class BenaaAiService extends ChangeNotifier {
       try {
         http.post(
           Uri.parse(_endpoints.first),
-          headers: {'Content-Type': 'application/json'},
+          headers: await CloudAuthService.authenticatedHeaders(),
           body: jsonEncode({'action': 'mark_read', 'insightId': id}),
         );
       } catch (_) {}
@@ -188,7 +200,7 @@ class BenaaAiService extends ChangeNotifier {
     try {
       http.post(
         Uri.parse(_endpoints.first),
-        headers: {'Content-Type': 'application/json'},
+        headers: await CloudAuthService.authenticatedHeaders(),
         body: jsonEncode({'action': 'dismiss', 'insightId': id}),
       );
     } catch (_) {}
@@ -207,25 +219,25 @@ class BenaaAiService extends ChangeNotifier {
     try {
       final sp = await SharedPreferences.getInstance();
       final str = jsonEncode(_insights.map((i) => i.toJson()).toList());
-      await sp.setString(_spCacheKey, str);
-      await sp.setString(_spLastAnalysisKey, _lastAnalysisTime);
+      await sp.setString(LocalScopeService.preferenceKey(_spCacheKey), str);
+      await sp.setString(LocalScopeService.preferenceKey(_spLastAnalysisKey), _lastAnalysisTime);
     } catch (_) {}
   }
 
   Future<void> _loadFromLocalCache() async {
     try {
       final sp = await SharedPreferences.getInstance();
-      final str = sp.getString(_spCacheKey);
-      _lastAnalysisTime = sp.getString(_spLastAnalysisKey) ?? 'مخزن محلياً';
+      final str = sp.getString(LocalScopeService.preferenceKey(_spCacheKey));
+      _lastAnalysisTime = sp.getString(LocalScopeService.preferenceKey(_spLastAnalysisKey)) ?? 'مخزن محلياً';
 
       if (str != null && str.isNotEmpty) {
         final List<dynamic> list = jsonDecode(str);
         _insights = list.map((e) => BenaaAiInsight.fromJson(e)).toList();
       } else {
-        _seedDefaultInsights();
+        _insights = [];
       }
     } catch (_) {
-      _seedDefaultInsights();
+      _insights = [];
     }
   }
 

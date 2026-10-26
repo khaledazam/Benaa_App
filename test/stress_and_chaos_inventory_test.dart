@@ -62,18 +62,19 @@ void main() {
 
       // Attempt sale of 100 (exceeding stock)
       final saleQty = 100.0;
-      await db.createSaleOrder(
+      await expectLater(db.createSaleOrder(
         'sale-neg-01',
         'INV-NEG-01',
         'محل الأمل للدهانات',
         16500.0,
         [{'item_code': 'PNT-GLOSS', 'item_name': 'دهان زيتي لامع 18 لتر', 'qty': saleQty, 'unit_price': 165.0, 'total': 16500.0}],
-      );
+      ), throwsStateError);
 
       // Check stock clamped at >= 0 (no negative corrupted stock)
       final items = await db.getLocalItems();
       final paint = items.firstWhere((i) => i.code == 'PNT-GLOSS');
-      expect(paint.currentStock >= 0, true);
+      expect(paint.currentStock, 50.0);
+      expect(await db.getSalesForCustomer('محل الأمل للدهانات'), isEmpty);
     });
 
     test('Chaos Test 3: Large Dataset Stress Test (50+ Products, Multiple Categories & Searches)', () async {

@@ -6,6 +6,8 @@ import '../providers/inventory_provider.dart';
 import '../../core/services/haptics_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/mongodb_sync_service.dart';
+import '../../core/services/offline_outbox_service.dart';
+import '../../core/services/cloud_auth_service.dart';
 import '../widgets/enterprise/enterprise_button.dart';
 import '../widgets/enterprise/section_header.dart';
 
@@ -20,23 +22,12 @@ class SyncManagerScreen extends StatefulWidget {
 class _SyncManagerScreenState extends State<SyncManagerScreen> {
   bool _isSyncing = false;
   bool _isPinging = false;
-  bool _isConnected = true;
-  String _pingMessage = 'متصل سحابياً مع قاعدة البيانات';
-  int _latencyMs = 42;
+  bool _isConnected = false;
+  String _pingMessage = 'جارٍ التحقق من الاتصال';
+  int _latencyMs = 0;
   Map<String, dynamic> _dbStats = {};
 
-  final List<Map<String, String>> _syncLogs = [
-    {
-      'time': '2026-10-25 04:15',
-      'title': 'حفظ محلي (Offline SQLite & Memory)',
-      'status': 'سندات التحويل وأرصدة المستودع محفوظة محلياً وجاهزة للمزامنة',
-    },
-    {
-      'time': '2026-10-25 04:00',
-      'title': 'مزامنة السيرفر المركزي (MongoDB Atlas: buildstock_db)',
-      'status': 'تم ربط خادم MongoDB بنجاح وقيد الأصناف وحركات المخزن',
-    },
-  ];
+  final List<Map<String, String>> _syncLogs = [];
 
   @override
   void initState() {
@@ -62,64 +53,45 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
 
   void _triggerMongoPush(InventoryProvider provider) async {
     setState(() => _isSyncing = true);
-
-    final res = await MongoDbSyncService.syncLocalItemsToMongo(provider.localItems);
-
-    await HapticsService.actionSuccess();
-    await NotificationService.showSyncNotification(
-      title: 'تمت مزامنة المخزون مع MongoDB Atlas',
-      body: 'تم تسجيل ${res['count'] ?? provider.localItems.length} صنفاً في قاعدة بيانات buildstock_db بنجاح.',
-    );
-
-    if (mounted) {
-      setState(() {
-        _isSyncing = false;
-        _syncLogs.insert(0, {
-          'time': DateTime.now().toString().substring(0, 16),
-          'title': 'مزامنة الأصناف إلى MongoDB Atlas',
-          'status': 'تم تسجيل وتحديث ${res['count'] ?? provider.localItems.length} صنفاً في مجموعة Product بنجاح',
-        });
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.success,
-          content: Text(
-            'تم تسجيل ${res['count'] ?? provider.localItems.length} صنفاً في قاعدة بيانات MongoDB Atlas (buildstock_db) بنجاح!',
-          ),
-        ),
-      );
-    }
+    try {
+      await CloudAuthService.refreshCurrentSession();
+      await OfflineOutboxService.instance.synchronize(endpoint: Uri.parse(MongoDbSyncService.apiBase),
+        token: await CloudAuthService.sessionToken());
+      final records = await OfflineOutboxService.instance.records();
+      final pending = records.where((entry) => entry['state'] != 'applied').length;
+      final conflicts = records.where((entry) => entry['state'] == 'conflict').length;
+      if (mounted) {
+        setState(() => _syncLogs.insert(0, {'time': DateTime.now().toString(),
+          'title': 'عمليات المزامنة المحفوظة', 'status': 'معلقة: $pending — تعارضات للمراجعة: $conflicts'}));
+        await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+          title: const Text('حالة العمليات'),
+          content: SizedBox(width: 480, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
+            children: records.map((row) => ListTile(
+              title: Text(row['operationId'].toString()),
+              subtitle: Text(row['state'].toString() + (row['error'] == null ? '' : '\n' + row['error'].toString())),
+            )).toList()))),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق'))],
+        ));
+      }
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally { if (mounted) setState(() => _isSyncing = false); }
   }
 
   void _triggerMongoPull(InventoryProvider provider) async {
     setState(() => _isSyncing = true);
-
-    final cloudItems = await MongoDbSyncService.pullProductsFromMongo();
-
-    if (mounted) {
-      setState(() {
-        _isSyncing = false;
-        _syncLogs.insert(0, {
-          'time': DateTime.now().toString().substring(0, 16),
-          'title': 'سحب وتحديث الأصناف من MongoDB',
-          'status': cloudItems.isNotEmpty
-              ? 'تم استرداد ${cloudItems.length} صنفاً مسجلاً في السحابة'
-              : 'تم فحص السحابة، الأصناف المحلية متطابقة ومحدثة',
-        });
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.primary,
-          content: Text(
-            cloudItems.isNotEmpty
-                ? 'تم استرداد وتحديث ${cloudItems.length} صنفاً من MongoDB Atlas'
-                : 'الأصناف المحلية متزامنة بالكامل مع السحابة',
-          ),
-        ),
-      );
-    }
+    try {
+      final items = await MongoDbSyncService.pullProductsFromMongo();
+      if (mounted) await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('أرصدة الخادم المعتمدة'),
+        content: SizedBox(width: 480, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
+          children: items.map((item) => ListTile(title: Text(item['name']?.toString() ?? ''),
+            subtitle: Text('الرصيد: ' + item['currentStock'].toString()))).toList()))),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق'))],
+      ));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تحميل أرصدة الخادم: ' + error.toString())));
+    } finally { if (mounted) setState(() => _isSyncing = false); }
   }
 
   @override

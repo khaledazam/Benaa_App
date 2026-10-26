@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'cloud_auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -54,7 +55,7 @@ class MongoDbSyncService {
     final stopwatch = Stopwatch()..start();
     try {
       final response = await http
-          .get(Uri.parse(_apiBase), headers: {'Accept': 'application/json'})
+          .get(Uri.parse(_apiBase), headers: await CloudAuthService.authenticatedHeaders())
           .timeout(const Duration(seconds: 5));
 
       stopwatch.stop();
@@ -89,52 +90,7 @@ class MongoDbSyncService {
 
   /// Push local items to MongoDB Atlas Product collection
   static Future<Map<String, dynamic>> syncLocalItemsToMongo(List<ItemModel> items) async {
-    try {
-      final payload = {
-        'action': 'sync_items',
-        'items': items.map((i) => {
-          'code': i.code,
-          'name': i.name,
-          'category': i.category,
-          'currentStock': i.currentStock,
-          'unitPrice': i.unitPrice,
-          'unit': i.unit,
-          'location': i.location,
-        }).toList(),
-      };
-
-      final response = await http
-          .post(
-            Uri.parse(_apiBase),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(payload),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final sp = await SharedPreferences.getInstance();
-        final nowStr = DateTime.now().toString().split('.').first;
-        await sp.setString(_spLastSyncKey, nowStr);
-
-        return {
-          'success': true,
-          'count': data['upsertedCount'] ?? items.length,
-          'message': data['message'] ?? 'تمت مزامنة الأصناف بنجاح مع MongoDB',
-          'time': nowStr,
-        };
-      } else {
-        return {
-          'success': false,
-          'error': 'HTTP ${response.statusCode}: ${response.body}',
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
-    }
+    return {'success': false, 'error': 'Snapshot stock upload is disabled. Use durable authorized operations.'};
   }
 
   /// Pull products from MongoDB Atlas to local app
@@ -144,7 +100,7 @@ class MongoDbSyncService {
       final response = await http
           .post(
             Uri.parse(_apiBase),
-            headers: {'Content-Type': 'application/json'},
+            headers: await CloudAuthService.authenticatedHeaders(),
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 10));
@@ -157,7 +113,7 @@ class MongoDbSyncService {
     } catch (e) {
       debugPrint("Error pulling products from MongoDB: $e");
     }
-    return [];
+    throw StateError('Unable to load authorized warehouse inventory');
   }
 
   /// Register / Provision a User directly into MongoDB Atlas User collection
@@ -183,7 +139,7 @@ class MongoDbSyncService {
       final response = await http
           .post(
             Uri.parse(_apiBase),
-            headers: {'Content-Type': 'application/json'},
+            headers: await CloudAuthService.authenticatedHeaders(),
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 5));

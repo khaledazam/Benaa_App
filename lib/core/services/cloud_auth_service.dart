@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'local_scope_service.dart';
+import '../../data/models/customer_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
@@ -174,19 +176,54 @@ class CloudAuthService {
   static List<BenaaWarehouseInfo> get cachedWarehouses => _cachedWarehouses;
   static bool get isSuperAdmin => _currentUser?.role == 'SUPER_ADMIN' || _currentUser?.role == 'admin';
   static bool get isLoggedIn => _currentUser != null;
+  static Future<String?> sessionToken() async => (await SharedPreferences.getInstance()).getString('benaa_session_token');
+  static Future<Map<String, String>> authenticatedHeaders() async {
+    final token = await sessionToken();
+    return {'Content-Type': 'application/json', if (token != null) 'Authorization': 'Bearer ' + token};
+  }
+  static void _selectScope() {
+    final previous = LocalScopeService.key;
+    LocalScopeService.select(_currentUser?.id, _currentUser?.primaryWarehouseId);
+    if (previous != LocalScopeService.key) CustomerModel.clearAllCustomers();
+  }
+
+  static Future<bool> refreshCurrentSession() async {
+    if (_currentUser == null) return false;
+    for (final base in _apiBases) {
+      try {
+        final response = await http.get(Uri.parse('$base/api/auth/session'),
+          headers: await authenticatedHeaders()).timeout(const Duration(seconds: 5));
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          await logout();
+          return false;
+        }
+        if (response.statusCode == 200) {
+          final user = CompanyUser.fromJson(jsonDecode(response.body));
+          if (user.id != _currentUser!.id) { await logout(); return false; }
+          _currentUser = user;
+          _selectScope();
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_spUserKey, jsonEncode(user.toJson()));
+          return true;
+        }
+      } catch (_) { /* Offline cached reads remain scoped; server validates writes. */ }
+    }
+    return false;
+  }
 
   /// Initialize service and load cached session
   static Future<void> initialize() async {
     try {
       final sp = await SharedPreferences.getInstance();
       final userStr = sp.getString(_spUserKey);
-      if (userStr != null) {
+      if (userStr != null && sp.getString('benaa_session_token') != null) {
         _currentUser = CompanyUser.fromJson(jsonDecode(userStr));
       } else {
         _currentUser = null; // Clean security: requires login
       }
 
-      final listStr = sp.getString(_spUsersListKey);
+      _selectScope();
+      final listStr = sp.getString(LocalScopeService.preferenceKey(_spUsersListKey));
       if (listStr != null) {
         final List<dynamic> list = jsonDecode(listStr);
         _cachedUsers = list.map((e) => CompanyUser.fromJson(e)).toList();
@@ -194,7 +231,7 @@ class CloudAuthService {
         _seedInitialCompanyUsers();
       }
 
-      final whStr = sp.getString(_spWarehousesKey);
+      final whStr = sp.getString(LocalScopeService.preferenceKey(_spWarehousesKey));
       if (whStr != null) {
         final List<dynamic> list = jsonDecode(whStr);
         _cachedWarehouses = list.map((e) => BenaaWarehouseInfo.fromJson(e)).toList();
@@ -212,23 +249,7 @@ class CloudAuthService {
   }
 
   static void _seedInitialWarehouses() {
-    _cachedWarehouses = [
-      BenaaWarehouseInfo(
-        id: '6a7f78f2e720fc52f142e03e',
-        name: 'مستودع مواد البناء والديكور الرئيسي (MAIN-WH)',
-        code: 'MAIN-WH',
-      ),
-      BenaaWarehouseInfo(
-        id: '6a7f78f2e720fc52f142e03f',
-        name: 'مستودع الديكور والتشطيبات الحديثة (DECOR-WH)',
-        code: 'DECOR-WH',
-      ),
-      BenaaWarehouseInfo(
-        id: '6a7f78f2e720fc52f142e040',
-        name: 'المستودع الاحتياطي والتخزين الثانوي (BACKUP-WH)',
-        code: 'BACKUP-WH',
-      ),
-    ];
+    _cachedWarehouses = [];
   }
 
   static void _seedInitialCompanyUsers() {
@@ -241,14 +262,14 @@ class CloudAuthService {
       try {
         final res = await http.get(
           Uri.parse('$base/api/warehouses'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await authenticatedHeaders(),
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
           final List<dynamic> list = jsonDecode(res.body);
           _cachedWarehouses = list.map((e) => BenaaWarehouseInfo.fromJson(e)).toList();
           final sp = await SharedPreferences.getInstance();
-          await sp.setString(_spWarehousesKey, jsonEncode(list));
+          await sp.setString(LocalScopeService.preferenceKey(_spWarehousesKey), jsonEncode(list));
           return _cachedWarehouses;
         }
       } catch (_) {}
@@ -277,7 +298,7 @@ class CloudAuthService {
       try {
         final res = await http.post(
           Uri.parse('$base/api/warehouses'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await authenticatedHeaders(),
           body: jsonEncode({
             'name': name.trim(),
             'address': address?.trim() ?? '',
@@ -298,7 +319,7 @@ class CloudAuthService {
     _cachedWarehouses.add(newWh);
     final sp = await SharedPreferences.getInstance();
     final jsonList = _cachedWarehouses.map((w) => w.toJson()).toList();
-    await sp.setString(_spWarehousesKey, jsonEncode(jsonList));
+    await sp.setString(LocalScopeService.preferenceKey(_spWarehousesKey), jsonEncode(jsonList));
     return true;
   }
 
@@ -308,7 +329,7 @@ class CloudAuthService {
       try {
         final res = await http.get(
           Uri.parse('$base/api/admin/employees'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await authenticatedHeaders(),
         ).timeout(const Duration(seconds: 5));
 
         if (res.statusCode == 200) {
@@ -366,7 +387,7 @@ class CloudAuthService {
       try {
         final res = await http.post(
           Uri.parse('$base/api/admin/employees'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await authenticatedHeaders(),
           body: jsonEncode({
             'name': name,
             'email': email,
@@ -412,7 +433,7 @@ class CloudAuthService {
       try {
         final res = await http.put(
           Uri.parse('$base/api/admin/employees'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await authenticatedHeaders(),
           body: jsonEncode({
             'id': employeeId,
             'primaryWarehouseId': newPrimaryWarehouseId,
@@ -461,7 +482,7 @@ class CloudAuthService {
     try {
       final sp = await SharedPreferences.getInstance();
       final str = jsonEncode(_cachedUsers.map((u) => u.toJson()).toList());
-      await sp.setString(_spUsersListKey, str);
+      await sp.setString(LocalScopeService.preferenceKey(_spUsersListKey), str);
     } catch (_) {}
   }
 
@@ -482,7 +503,7 @@ class CloudAuthService {
       try {
         final res = await http.post(
           Uri.parse('$base/api/auth/login'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await authenticatedHeaders(),
           body: jsonEncode({
             'email': cleanId,
             'password': cleanPass,
@@ -492,6 +513,9 @@ class CloudAuthService {
         final data = jsonDecode(res.body);
 
         if (res.statusCode == 200) {
+          if (data['sessionId'] is! String || (data['sessionId'] as String).isEmpty) {
+            return {'success': false, 'message': 'Missing authenticated server session'};
+          }
           final wIds = (data['warehouseIds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
           final perms = (data['permissions'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
@@ -513,6 +537,7 @@ class CloudAuthService {
           );
 
           _currentUser = user;
+          _selectScope();
           final sp = await SharedPreferences.getInstance();
           await sp.setString(_spUserKey, jsonEncode(user.toJson()));
           if (data['sessionId'] != null) {
@@ -551,6 +576,9 @@ class CloudAuthService {
   /// Sign out current user
   static Future<void> logout() async {
     _currentUser = null;
+    _cachedUsers = [];
+    _cachedWarehouses = [];
+    _selectScope();
     final sp = await SharedPreferences.getInstance();
     await sp.remove(_spUserKey);
     await sp.remove('benaa_session_token');

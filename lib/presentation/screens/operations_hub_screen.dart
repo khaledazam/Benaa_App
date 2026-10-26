@@ -1,3 +1,4 @@
+import 'projects_screen.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -38,6 +39,7 @@ class OperationsHubScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
+
                 Container(
                   width: 46,
                   height: 46,
@@ -90,6 +92,9 @@ class OperationsHubScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          ListTile(leading: const Icon(Icons.construction), title: const Text('المشاريع وصرف المواد'),
+            subtitle: const Text('طلبات وحجز وصرف وإرجاع مواد المشاريع بالكميات'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen()))),
           _buildOperationTile(
             context,
             title: 'استلام وإرسال الشحنات بين الفروع',

@@ -10,6 +10,7 @@ import '../../data/models/transfer_model.dart';
 import '../../data/models/customer_model.dart';
 import '../../data/models/product_unit_model.dart';
 import '../../core/services/unit_conversion_engine.dart';
+import '../../core/services/local_scope_service.dart';
 
 class DBHelper {
   static final DBHelper _instance = DBHelper._internal();
@@ -20,6 +21,37 @@ class DBHelper {
   bool _isInMemoryFallback = false;
   bool _isClearedPermanently = false;
   bool _isMemInitialized = false;
+  String _activeScope = LocalScopeService.key;
+  Future<void>? _memInitialization;
+  Future<void> _salesWrites = Future.value();
+  String _storageKey(String name) => _activeScope == 'legacy' ? name : '${_activeScope}_$name';
+  Future<void> close() async {
+    await _salesWrites;
+    if (_isInMemoryFallback && _isMemInitialized) await _saveMemStateToPrefs();
+    if (_database != null) await _database!.close();
+    _database = null;
+    _clearAllMemLists();
+    _isMemInitialized = false;
+    _memInitialization = null;
+    _isInMemoryFallback = false;
+  }
+  Future<void> _ensureScope() async {
+    if (_activeScope == LocalScopeService.key) return;
+    if (_database != null) await _database!.close();
+    _database = null;
+    _clearAllMemLists();
+    CustomerModel.clearAllCustomers();
+    _isMemInitialized = false;
+    _memInitialization = null;
+    _isInMemoryFallback = false;
+    _isClearedPermanently = false;
+    _activeScope = LocalScopeService.key;
+  }
+  Future<void> _ready() async {
+    await _ensureScope();
+    final db = await database;
+    if (db == null) await _initMemData();
+  }
 
   // In-memory fallback structures for web/testing or SQLite failures
   final List<Map<String, dynamic>> _memItems = [];
@@ -36,6 +68,8 @@ class DBHelper {
   final List<Map<String, dynamic>> _memAuditLogs = [];
 
   Future<Database?> get database async {
+    await _ensureScope();
+    if (_isInMemoryFallback) return null;
     if (kIsWeb) {
       _isInMemoryFallback = true;
       return null;
@@ -52,16 +86,19 @@ class DBHelper {
   }
 
   Future<Database> _initDB() async {
-    String path = join(await getDatabasesPath(), 'benaa_inventory.db');
+    String path = join(await getDatabasesPath(), LocalScopeService.actorId == null ? 'benaa_inventory.db' : 'benaa_inventory_' + LocalScopeService.key + '.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createTables,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE sale_items ADD COLUMN base_qty REAL;');
+    }
     if (oldVersion < 2) {
       try { await db.execute('ALTER TABLE items ADD COLUMN unit_price REAL DEFAULT 25.0;'); } catch (_) {}
       try { await db.execute('ALTER TABLE items ADD COLUMN location TEXT;'); } catch (_) {}
@@ -149,6 +186,7 @@ class DBHelper {
         item_code TEXT NOT NULL,
         item_name TEXT NOT NULL,
         qty REAL NOT NULL,
+        base_qty REAL,
         unit_price REAL NOT NULL,
         FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE
       )
@@ -222,14 +260,8 @@ class DBHelper {
   // --- Web / Fallback In-Memory Initializer & Local Storage Persistence ---
   Future<void> _initMemData() async {
     if (_isMemInitialized) return;
+    await (_memInitialization ??= _loadMemStateFromPrefs());
     _isMemInitialized = true;
-
-    if (_isClearedPermanently) {
-      _clearAllMemLists();
-      return;
-    }
-
-    await _loadMemStateFromPrefs();
   }
 
   void _clearAllMemLists() {
@@ -247,88 +279,40 @@ class DBHelper {
     _memAuditLogs.clear();
   }
 
+  Map<String, List<Map<String, dynamic>>> get _persistedLists => {
+    'items': _memItems,
+    'transfers': _memTransfers,
+    'transfer_items': _memTransferItems,
+    'sales': _memSales,
+    'sale_items': _memSaleItems,
+    'product_units': _memProductUnits,
+    'movements': _memStockMovements,
+    'returns': _memReturns,
+    'return_items': _memReturnItems,
+    'customers': _memCustomers,
+    'customer_payments': _memCustomerPayments,
+    'audit_logs': _memAuditLogs,
+  };
+
   Future<void> _loadMemStateFromPrefs() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final isCleared = prefs.getBool('benaa_db_cleared') ?? false;
-      if (isCleared) {
-        _isClearedPermanently = true;
-        _clearAllMemLists();
-        return;
-      }
-
-      final zeroStockMigrated = prefs.getBool('benaa_zero_stock_catalog_v1') ?? false;
-      if (!zeroStockMigrated) {
-        seedRealisticTestData(force: true);
-        await prefs.setBool('benaa_zero_stock_catalog_v1', true);
-        return;
-      }
-
-      final itemsJson = prefs.getString('benaa_mem_items');
-      if (itemsJson != null && itemsJson.isNotEmpty) {
-        final List<dynamic> decoded = jsonDecode(itemsJson);
-        _memItems.clear();
-        _memItems.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
-      } else if (_memItems.isEmpty && !_isClearedPermanently) {
-        _seedDefaultDemoData();
-      }
-
-      final transfersJson = prefs.getString('benaa_mem_transfers');
-      if (transfersJson != null && transfersJson.isNotEmpty) {
-        final List<dynamic> decoded = jsonDecode(transfersJson);
-        _memTransfers.clear();
-        _memTransfers.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
-      }
-
-      final transferItemsJson = prefs.getString('benaa_mem_transfer_items');
-      if (transferItemsJson != null && transferItemsJson.isNotEmpty) {
-        final List<dynamic> decoded = jsonDecode(transferItemsJson);
-        _memTransferItems.clear();
-        _memTransferItems.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
-      }
-
-      final salesJson = prefs.getString('benaa_mem_sales');
-      if (salesJson != null && salesJson.isNotEmpty) {
-        final List<dynamic> decoded = jsonDecode(salesJson);
-        _memSales.clear();
-        _memSales.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
-      }
-
-      final movementsJson = prefs.getString('benaa_mem_movements');
-      if (movementsJson != null && movementsJson.isNotEmpty) {
-        final List<dynamic> decoded = jsonDecode(movementsJson);
-        _memStockMovements.clear();
-        _memStockMovements.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
-      }
-
-      final customersJson = prefs.getString('benaa_mem_customers');
-      if (customersJson != null && customersJson.isNotEmpty) {
-        final List<dynamic> decoded = jsonDecode(customersJson);
-        _memCustomers.clear();
-        _memCustomers.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
-      }
-    } catch (e) {
-      debugPrint("Error loading persistent state: $e");
-      if (_memItems.isEmpty && !_isClearedPermanently) {
-        _seedDefaultDemoData();
+    final prefs = await SharedPreferences.getInstance();
+    final snapshot = prefs.getString(_storageKey('benaa_local_snapshot_v2'));
+    final Map<String, dynamic> state = snapshot == null ? {} : jsonDecode(snapshot);
+    // No demo migration or seed may replace user inventory/history.
+    for (final entry in _persistedLists.entries) {
+      final legacy = prefs.getString(_storageKey('benaa_mem_' + entry.key));
+      final value = state[entry.key] ?? (legacy == null ? null : jsonDecode(legacy));
+      if (value != null) {
+        entry.value.clear();
+        entry.value.addAll((value as List).map((row) => Map<String, dynamic>.from(row)));
       }
     }
   }
 
   Future<void> _saveMemStateToPrefs() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('benaa_db_cleared', _isClearedPermanently);
-      if (!_isClearedPermanently) {
-        await prefs.setString('benaa_mem_items', jsonEncode(_memItems));
-        await prefs.setString('benaa_mem_transfers', jsonEncode(_memTransfers));
-        await prefs.setString('benaa_mem_transfer_items', jsonEncode(_memTransferItems));
-        await prefs.setString('benaa_mem_sales', jsonEncode(_memSales));
-        await prefs.setString('benaa_mem_movements', jsonEncode(_memStockMovements));
-        await prefs.setString('benaa_mem_customers', jsonEncode(_memCustomers));
-      }
-    } catch (e) {
-      debugPrint("Error saving persistent state: $e");
+    final prefs = await SharedPreferences.getInstance();
+    if (!await prefs.setString(_storageKey('benaa_local_snapshot_v2'), jsonEncode(_persistedLists))) {
+      throw StateError('Unable to persist local warehouse data');
     }
   }
 
@@ -804,6 +788,7 @@ class DBHelper {
   // --- CRUD Operations ---
 
   Future<List<TransferModel>> getTransfers() async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       await _initMemData();
@@ -839,6 +824,7 @@ class DBHelper {
   }
 
   Future<TransferModel?> getTransferById(String id) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       await _initMemData();
@@ -864,6 +850,7 @@ class DBHelper {
   }
 
   Future<void> updateTransferItemQty(int itemId, double actualQty, String? notes, {String? imagePath}) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       final idx = _memTransferItems.indexWhere((i) => i['id'] == itemId);
@@ -894,6 +881,7 @@ class DBHelper {
   }
 
   Future<void> confirmTransferAudit(String transferId, String status) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       await _initMemData();
@@ -1031,6 +1019,7 @@ class DBHelper {
   }
 
   Future<List<ItemModel>> getLocalItems() async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       await _initMemData();
@@ -1066,6 +1055,7 @@ class DBHelper {
   }
 
   Future<List<ProductUnitModel>> getProductUnits(String productCode) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       await _initMemData();
@@ -1105,6 +1095,7 @@ class DBHelper {
   }
 
   Future<void> saveProductUnit(ProductUnitModel unit) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       _initMemData();
@@ -1129,6 +1120,7 @@ class DBHelper {
   }
 
   Future<void> postStockMovement(StockMovementSnapshot snapshot) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       _initMemData();
@@ -1144,6 +1136,7 @@ class DBHelper {
   }
 
   Future<List<StockMovementSnapshot>> getStockMovements(String productCode) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       _initMemData();
@@ -1189,6 +1182,7 @@ class DBHelper {
   }
 
   Future<void> recordLocalStockAudit(String itemCode, String itemName, double systemQty, double countedQty, String? notes) async {
+    await _ready();
     final nowIso = DateTime.now().toIso8601String().split('T').first;
     final auditNumber = 'AUD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     final variance = countedQty - systemQty;
@@ -1237,6 +1231,7 @@ class DBHelper {
   }
 
   Future<List<Map<String, dynamic>>> getAuditLogs() async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       return List<Map<String, dynamic>>.from(_memAuditLogs);
@@ -1259,6 +1254,7 @@ class DBHelper {
     required String notes,
     required List<Map<String, dynamic>> items,
   }) async {
+    await _ready();
     final transferId = 'trf-custom-${DateTime.now().microsecondsSinceEpoch}-${_txCounter++}';
     final db = await database;
 
@@ -1358,6 +1354,7 @@ class DBHelper {
     double unitPrice = 25.0,
     String location = 'ممر A - رف 1 - كابينة 1',
   }) async {
+    await _ready();
     final cleanCode = code.trim();
     final cleanName = name.trim();
 
@@ -1443,6 +1440,7 @@ class DBHelper {
   }
 
   Future<void> updateItemStockDirectly(String itemCode, double newStock, String reasonNote) async {
+    await _ready();
     final nowIso = DateTime.now().toIso8601String().split('T').first;
     final db = await database;
     if (db == null || _isInMemoryFallback) {
@@ -1516,111 +1514,89 @@ class DBHelper {
   }
 
   Future<void> createSaleOrder(String id, String invoiceNumber, String shopName, double totalAmount, List<Map<String, dynamic>> items) async {
-    final date = DateTime.now().toIso8601String().split('T').first;
-
-    CustomerModel.registerSaleForCustomer(shopName, totalAmount);
-
-    if (_database == null || _isInMemoryFallback) {
-      _memSales.add({
-        'id': id,
-        'invoice_number': invoiceNumber,
-        'shop_name': shopName,
-        'date': date,
-        'total_amount': totalAmount,
-        'status': 'completed',
-        'items': items,
-      });
-
-      for (var item in items) {
-        final itemCode = item['item_code'].toString();
-        final qty = (item['qty'] as num).toDouble();
-        final unit = item['unit']?.toString() ?? 'حبة';
-        final baseQty = (item['base_qty'] as num?)?.toDouble() ?? qty;
-
-        _memSaleItems.add({
-          'sale_id': id,
-          'item_code': itemCode,
-          'item_name': item['item_name'],
-          'qty': qty,
-          'unit_price': (item['unit_price'] as num).toDouble(),
-        });
-
-        final idx = _memItems.indexWhere((i) => i['code'] == itemCode);
-        if (idx != -1) {
-          final current = (_memItems[idx]['current_stock'] as num).toDouble();
-          _memItems[idx]['current_stock'] = (current - qty).clamp(0.0, double.infinity);
+    await _ready();
+    final scope = LocalScopeService.key;
+    final result = _salesWrites.then((_) async {
+      if (scope != LocalScopeService.key) throw StateError('Account or warehouse changed');
+      if (id.isEmpty || items.isEmpty || !totalAmount.isFinite || totalAmount < 0) {
+        throw ArgumentError('Invalid sale');
+      }
+      final demand = <String, double>{};
+      for (final item in items) {
+        final code = item['item_code']?.toString() ?? '';
+        final qty = (item['qty'] as num?)?.toDouble() ?? double.nan;
+        final base = (item['base_qty'] as num?)?.toDouble() ?? qty;
+        final price = (item['unit_price'] as num?)?.toDouble() ?? double.nan;
+        if (code.isEmpty || !qty.isFinite || qty <= 0 || !base.isFinite || base <= 0 || !price.isFinite || price < 0) {
+          throw ArgumentError('Invalid sale quantity or price');
         }
-
-        // Post stock movement snapshot in memory
-        await postStockMovement(StockMovementSnapshot(
-          transactionId: 'MOV-SALE-${DateTime.now().millisecondsSinceEpoch}-$itemCode',
-          transactionType: 'مبيعات (صرف عميل)',
-          productCode: itemCode,
-          enteredQuantity: qty,
-          enteredUnit: unit,
-          conversionFactor: qty > 0 ? baseQty / qty : 1.0,
-          baseQuantity: baseQty,
-          baseUnit: unit,
-          date: date,
-          notes: 'فاتورة مبيعات #$invoiceNumber - العميل: $shopName',
-        ));
+        demand[code] = (demand[code] ?? 0) + base;
       }
-      return;
-    }
-
-    final db = await database;
-    if (db == null) return;
-
-    try {
-      await db.insert('sales', {
-        'id': id,
-        'invoice_number': invoiceNumber,
-        'shop_name': shopName,
-        'date': date,
-        'total_amount': totalAmount,
-        'status': 'completed',
-      });
-
-      for (var item in items) {
-        final itemCode = item['item_code'].toString();
+      final date = DateTime.now().toIso8601String().split('T').first;
+      final sale = {'id': id, 'invoice_number': invoiceNumber, 'shop_name': shopName,
+        'date': date, 'total_amount': totalAmount, 'status': 'completed'};
+      final rows = <Map<String, dynamic>>[];
+      final movements = <Map<String, dynamic>>[];
+      for (var index = 0; index < items.length; index++) {
+        final item = items[index];
         final qty = (item['qty'] as num).toDouble();
-        final unit = item['unit']?.toString() ?? 'حبة';
-        final baseQty = (item['base_qty'] as num?)?.toDouble() ?? qty;
-
-        await db.insert('sale_items', {
-          'sale_id': id,
-          'item_code': itemCode,
-          'item_name': item['item_name'],
-          'qty': qty,
-          'unit_price': (item['unit_price'] as num).toDouble(),
-        });
-
-        await db.rawUpdate('''
-          UPDATE items 
-          SET current_stock = current_stock - ? 
-          WHERE code = ?
-        ''', [qty, itemCode]);
-
-        // Post stock movement snapshot in database
-        await postStockMovement(StockMovementSnapshot(
-          transactionId: 'MOV-SALE-${DateTime.now().millisecondsSinceEpoch}-$itemCode',
-          transactionType: 'مبيعات (صرف عميل)',
-          productCode: itemCode,
-          enteredQuantity: qty,
-          enteredUnit: unit,
-          conversionFactor: qty > 0 ? baseQty / qty : 1.0,
-          baseQuantity: baseQty,
-          baseUnit: unit,
-          date: date,
-          notes: 'فاتورة مبيعات #$invoiceNumber - العميل: $shopName',
-        ));
+        final base = (item['base_qty'] as num?)?.toDouble() ?? qty;
+        rows.add({'sale_id': id, 'item_code': item['item_code'], 'item_name': item['item_name'],
+          'qty': qty, 'base_qty': base, 'unit_price': item['unit_price']});
+        movements.add(StockMovementSnapshot(
+          transactionId: 'MOV-SALE-' + id + '-' + index.toString(),
+          transactionType: 'مبيعات (صرف عميل)', productCode: item['item_code'].toString(),
+          enteredQuantity: qty, enteredUnit: item['unit']?.toString() ?? 'حبة',
+          conversionFactor: base / qty, baseQuantity: base,
+          baseUnit: item['base_unit']?.toString() ?? item['unit']?.toString() ?? 'حبة',
+          date: date, notes: 'فاتورة مبيعات #' + invoiceNumber).toMap());
       }
-    } catch (e) {
-      debugPrint("Error creating sale order in SQLite: $e");
-    }
+      final db = await database;
+      if (db == null) {
+        if (_memSales.any((sale) => sale['id'] == id)) throw StateError('Sale already posted');
+        for (final entry in demand.entries) {
+          final product = _memItems.where((item) => item['code'] == entry.key);
+          if (product.isEmpty || (product.first['current_stock'] as num).toDouble() < entry.value) {
+            throw StateError('Insufficient stock: ' + entry.key);
+          }
+        }
+        final before = jsonDecode(jsonEncode(_persistedLists)) as Map<String, dynamic>;
+        try {
+          for (final entry in demand.entries) {
+            final product = _memItems.firstWhere((item) => item['code'] == entry.key);
+            product['current_stock'] = (product['current_stock'] as num).toDouble() - entry.value;
+          }
+          _memSales.add({...sale, 'items': items});
+          _memSaleItems.addAll(rows);
+          _memStockMovements.addAll(movements);
+          await _saveMemStateToPrefs();
+        } catch (_) {
+          for (final entry in _persistedLists.entries) {
+            entry.value.clear();
+            entry.value.addAll((before[entry.key] as List).map((row) => Map<String, dynamic>.from(row)));
+          }
+          rethrow;
+        }
+      } else {
+        await db.transaction((txn) async {
+          await txn.insert('sales', sale);
+          for (final entry in demand.entries) {
+            final changed = await txn.rawUpdate('UPDATE items SET current_stock = current_stock - ? WHERE code = ? AND current_stock >= ?',
+              [entry.value, entry.key, entry.value]);
+            if (changed != 1) throw StateError('Insufficient stock: ' + entry.key);
+          }
+          for (final row in rows) { await txn.insert('sale_items', row); }
+          for (final movement in movements) { await txn.insert('stock_movements', movement); }
+        });
+      }
+      CustomerModel.registerSaleForCustomer(shopName, totalAmount);
+    });
+    _salesWrites = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    await result;
   }
 
   Future<List<Map<String, dynamic>>> getSalesForCustomer(String shopName) async {
+    await _ready();
     final query = shopName.trim().toLowerCase();
     if (_database == null || _isInMemoryFallback) {
       return _memSales.where((s) {
@@ -1655,6 +1631,7 @@ class DBHelper {
     required double totalAmount,
     required List<Map<String, dynamic>> items,
   }) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       _memReturns.add({
@@ -1770,6 +1747,7 @@ class DBHelper {
   }
 
   Future<List<Map<String, dynamic>>> getReturnInvoices() async {
+    await _ready();
     if (_database == null || _isInMemoryFallback) {
       await _initMemData();
       return List.from(_memReturns);
@@ -1785,6 +1763,7 @@ class DBHelper {
   }
 
   Future<List<Map<String, dynamic>>> getReturnItems(String returnId) async {
+    await _ready();
     if (_database == null || _isInMemoryFallback) {
       return _memReturnItems.where((i) => i['return_id'] == returnId).toList();
     }
@@ -1799,6 +1778,7 @@ class DBHelper {
   }
 
   Future<void> clearAllDatabaseData() async {
+    await _ready();
     _isClearedPermanently = true;
     _isMemInitialized = true;
 
@@ -1821,20 +1801,12 @@ class DBHelper {
     _clearAllMemLists();
     CustomerModel.clearAllCustomers();
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('benaa_db_cleared', true);
-      await prefs.remove('benaa_mem_items');
-      await prefs.remove('benaa_mem_transfers');
-      await prefs.remove('benaa_mem_transfer_items');
-      await prefs.remove('benaa_mem_sales');
-      await prefs.remove('benaa_mem_movements');
-      await prefs.remove('benaa_mem_customers');
-    } catch (_) {}
+    await _saveMemStateToPrefs();
   }
 
-  /// Get Database raw bytes for backup/export
+
   Future<Uint8List?> getDatabaseBytes() async {
+    await _ready();
     try {
       if (kIsWeb) return null;
       String path = join(await getDatabasesPath(), 'benaa_inventory.db');
@@ -1850,6 +1822,7 @@ class DBHelper {
 
   /// Delete item from local stock
   Future<void> deleteItem(String code) async {
+    await _ready();
     final db = await database;
     if (db == null || _isInMemoryFallback) {
       _memItems.removeWhere((i) => i['code'] == code);
@@ -1871,6 +1844,7 @@ class DBHelper {
   /// 2. Reduces customer debt balance
   /// 3. Deletes the invoice
   Future<bool> voidSaleInvoice(int saleId) async {
+    await _ready();
     if (_database == null || _isInMemoryFallback) {
       final saleIndex = _memSales.indexWhere((s) => s['id'] == saleId);
       if (saleIndex == -1) return false;
@@ -1946,6 +1920,7 @@ class DBHelper {
   /// 1. Re-adds the paid amount back into customer debt
   /// 2. Deletes the payment record
   Future<bool> voidCustomerPayment(int paymentId) async {
+    await _ready();
     if (_database == null || _isInMemoryFallback) {
       final pIndex = _memCustomerPayments.indexWhere((p) => p['id'] == paymentId);
       if (pIndex == -1) return false;
@@ -1989,6 +1964,7 @@ class DBHelper {
 
   /// Delete Transfer Voucher
   Future<void> deleteTransfer(String transferId) async {
+    await _ready();
     if (_database == null || _isInMemoryFallback) {
       _memTransfers.removeWhere((t) => t['id'] == transferId);
       _memTransferItems.removeWhere((i) => i['transfer_id'] == transferId);

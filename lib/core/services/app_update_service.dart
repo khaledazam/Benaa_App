@@ -44,14 +44,15 @@ class AppVersionInfo {
 
 class AppUpdateService {
   // Current client build metadata
-  static const String currentVersion = '1.0.3';
-  static const int currentBuildNumber = 4;
+  static const String currentVersion = '1.0.4';
+  static const int currentBuildNumber = 5;
 
   static const String _versionEndpoint = 'https://web-nine-rho-39.vercel.app/version.json';
   static bool _hasPromptedThisSession = false;
 
   /// Check for updates silently on app startup (Dashboard)
   static Future<void> checkForUpdateSilent(BuildContext context) async {
+    if (kIsWeb) return; // Web clients automatically run the latest deployed server code
     if (_hasPromptedThisSession) return;
     try {
       final update = await fetchRemoteVersion();
@@ -268,10 +269,14 @@ class AppUpdateService {
                         icon: Icons.download_rounded,
                         onPressed: () async {
                           Navigator.pop(ctx);
-                          final targetUrl = kIsWeb ? update.webUrl : update.apkUrl;
-                          final uri = Uri.parse(targetUrl);
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          if (kIsWeb) {
+                            final uri = Uri.parse(update.webUrl);
+                            await launchUrl(uri, webOnlyWindowName: '_self');
+                          } else {
+                            final uri = Uri.parse(update.apkUrl);
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            }
                           }
                         },
                       ),

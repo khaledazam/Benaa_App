@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'cloud_auth_service.dart';
+import 'mongodb_sync_service.dart';
+import 'offline_outbox_service.dart';
 
 /// Cross-Warehouse availability result for BENAA centralized catalog
 class CrossWarehouseResult {
@@ -196,7 +198,7 @@ class BenaaWarehouseService {
     for (final base in _apiBases) {
       try {
         final uri = Uri.parse('$base$path');
-        final res = await http.get(uri).timeout(const Duration(milliseconds: 1500));
+        final res = await http.get(uri, headers: await CloudAuthService.authenticatedHeaders()).timeout(const Duration(milliseconds: 1500));
         if (res.statusCode == 200) return res;
       } catch (_) {}
     }
@@ -210,7 +212,7 @@ class BenaaWarehouseService {
         final res = await http
             .post(
               uri,
-              headers: {'Content-Type': 'application/json'},
+              headers: await CloudAuthService.authenticatedHeaders(),
               body: jsonEncode(body),
             )
             .timeout(const Duration(seconds: 4));
@@ -218,6 +220,20 @@ class BenaaWarehouseService {
       } catch (_) {}
     }
     return null;
+  }
+
+  static Future<Map<String, dynamic>> submitOperation(Map<String, dynamic> payload,
+    {String operationType = 'TRANSFER_LIFECYCLE'}) async {
+    await CloudAuthService.refreshCurrentSession();
+    final operation = await OfflineOutboxService.instance.enqueue(payload, operationType: operationType);
+    await OfflineOutboxService.instance.synchronize(endpoint: Uri.parse(MongoDbSyncService.apiBase),
+      token: await CloudAuthService.sessionToken());
+    final records = await OfflineOutboxService.instance.records();
+    final state = records.firstWhere((row) => row['operationId'] == operation['operationId']);
+    return {'success': state['state'] == 'applied', 'queued': state['state'] == 'queued',
+      'operationId': operation['operationId'], 'error': state['error'],
+      'message': state['state'] == 'applied' ? 'تم اعتماد العملية من الخادم' :
+        state['state'] == 'queued' ? 'حُفظت العملية محلياً وبانتظار المزامنة' : 'تعارض يحتاج مراجعة؛ العملية محفوظة'};
   }
 
   /// Discovers stock across other warehouses in BENAA
@@ -255,16 +271,10 @@ class BenaaWarehouseService {
       'fromWarehouseId': fromWarehouseId,
       'toWarehouseId': toWarehouseId,
       'quantity': quantity,
-      'actorEmail': user?.email ?? 'khaled@admin.com',
-      'actorRole': user?.role ?? 'STOREKEEPER',
       'notes': notes ?? 'طلب تحويل تلقائي لسد العجز عبر تطبيق بناء',
     };
 
-    final res = await _postWithFallback('/api/inventory/transfers/lifecycle', body);
-    if (res != null) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
-    }
-    return {'success': false, 'error': 'فشل الاتصال بخادم بناء'};
+    return submitOperation(body);
   }
 
   /// Advances or completes a transfer in the 6-stage lifecycle
@@ -280,17 +290,11 @@ class BenaaWarehouseService {
       'action': action,
       'transferId': transferId,
       'receivedQuantity': receivedQuantity,
-      'actorEmail': user?.email ?? 'khaled@admin.com',
-      'actorRole': user?.role ?? 'SUPER_ADMIN',
       'cancellationReason': cancellationReason,
       'discrepancyNotes': discrepancyNotes,
     };
 
-    final res = await _postWithFallback('/api/inventory/transfers/lifecycle', body);
-    if (res != null) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
-    }
-    return {'success': false, 'error': 'فشل تنفيذ العملية'};
+    return submitOperation(body);
   }
 
   /// Fetches transfers from the lifecycle endpoint

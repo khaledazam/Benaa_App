@@ -104,14 +104,18 @@ class _LocalStockScreenState extends State<LocalStockScreen> {
             notes: notesController.text.trim(),
           );
 
-          await HapticsService.actionSuccess();
+          if (res['success'] != true && res['queued'] != true) {
+            if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(res['message'].toString())));
+            return;
+          }
+          if (res['success'] == true) await HapticsService.actionSuccess();
 
           if (ctx.mounted) {
             Navigator.pop(ctx);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 backgroundColor: AppColors.success,
-                content: Text('تم إرسال طلب تحويل ($qty ${item.unit}) من ${best.warehouseName} بنجاح!'),
+                content: Text(res['message']?.toString() ?? 'تعذر اعتماد الطلب؛ راجع المزامنة'),
               ),
             );
           }
